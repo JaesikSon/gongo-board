@@ -10,6 +10,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "collector"))
 import boards  # noqa: E402
 import lh  # noqa: E402
 import onbid  # noqa: E402
+import results  # noqa: E402
 from common import KST, norm_date, org_type, sido_of  # noqa: E402
 
 NOW = datetime(2026, 9, 30, 9, 0, tzinfo=KST)
@@ -121,6 +122,82 @@ def test_board_extract_keywords_and_dates():
     assert recs[0]["url"] == "https://ex.or.kr/board/view.do?id=12"
     assert recs[1]["url"] == "https://ex.or.kr/board/list.do"  # JS 링크는 게시판으로
     assert recs[0]["posted"] == "2026-09-20"
+
+
+RESULT_HTML = """
+<ul>
+<li><a href="v?1">동탄 상업용지 매각 개찰결과 공고</a> 2026-09-25</li>
+<li><a href="v?2">청사 청소용역 낙찰자 공고</a> 2026-09-25</li>
+<li><a href="v?3">잔여 필지 수의계약 공급 안내</a> 2026-09-20</li>
+</ul>"""
+
+
+def test_board_result_posts_are_marked():
+    soup = BeautifulSoup(RESULT_HTML, "html.parser")
+    src = {"name": "테스트도시공사", "sido": "경기", "type": "지방공기업"}
+    recs = boards.extract_notices("https://ex.or.kr/b/", soup, src, since="2026-06-01")
+    kinds = {r["title"]: r["kind"] for r in recs}
+    assert kinds == {"동탄 상업용지 매각 개찰결과 공고": "결과공고", "잔여 필지 수의계약 공급 안내": "공고"}
+    res = next(r for r in recs if r["kind"] == "결과공고")["res"]
+    assert res["stat"] == "결과공고" and res["opbd"] == "2026-09-25"
+
+
+# 2026-10-01 실제 입찰결과 API 응답에서 발췌
+WIN_ROW = {"cltrMngNo": "2025-0900-063750", "prptDivNm": "기타일반재산", "cltrUsgMclsCtgrNm": "주거용건물",
+           "cltrUsgSclsCtgrNm": "단독주택", "onbidCltrNm": "강원특별자치도 정선군 고한읍 고한리 124-19 단독주택",
+           "landSqms": 152, "bldSqms": 82.85, "pbctNsq": "1", "apslEvlAmt": 136952000,
+           "lowstBidPrcIndctCont": "86279400", "cltrOpbdDt": "202609301000", "pbctStatCd": "0010",
+           "pbctStatNm": "낙찰", "scfbAmt": "88200000", "vldBddrNope": 1, "apslPrcCtrsScfbPrcRto": 64.4,
+           "lowstBidCtrsScfbPrcRto": 102.23}
+
+
+def test_result_parsing_real_row():
+    res = results.to_result(WIN_ROW)
+    assert res == {"stat": "낙찰", "amt": 88200000, "rate": 64.4, "mrate": 102.2, "bidders": 1,
+                   "opbd": "2026-09-30 10:00", "nsq": "1"}
+    rec = results.to_archive_record(WIN_ROW)
+    assert rec["sido"] == "강원" and rec["area"] == 152 and rec["res"]["amt"] == 88200000
+    fail = results.to_result({**WIN_ROW, "pbctStatCd": "0011", "pbctStatNm": "유찰", "scfbAmt": None})
+    assert fail["stat"] == "유찰" and fail["amt"] is None and fail["rate"] is None
+    no_apsl = results.to_result({**WIN_ROW, "apslEvlAmt": None, "apslPrcCtrsScfbPrcRto": None})
+    assert no_apsl["rate"] is None and no_apsl["mrate"] == 102.2
+    assert sido_of("전남광주통합특별시 장흥군 장흥읍") == "광주·전남"
+
+
+def test_latest_by_item_keeps_newest_round():
+    rows = [{**WIN_ROW, "cltrOpbdDt": "202609231000", "pbctStatCd": "0011"}, WIN_ROW]
+    best = results.latest_by_item(rows)
+    assert results.to_result(best["2025-0900-063750"])["stat"] == "낙찰"
+
+
+def _act(id_, end, **kw):
+    return {"id": id_, "src": "온비드", "kind": "물건", "title": id_, "end": end, "first_seen": "x", **kw}
+
+
+def test_build_archive_flow():
+    today = NOW.strftime("%Y-%m-%d")
+    prev = {"onbid:A": _act("onbid:A", "2026-10-02 17:00"), "onbid:GONE": _act("onbid:GONE", "2026-10-05"),
+            "lh:1": {**_act("lh:1", "2026-09-29"), "src": "LH", "kind": "공고"}}
+    active = {"onbid:A": _act("onbid:A", "2026-10-02 17:00"), "onbid:B": _act("onbid:B", "2026-10-03"),
+              "lh:1": {**_act("lh:1", "2026-09-29"), "src": "LH", "kind": "공고"}}
+    archive = {"onbid:OLD": {**_act("onbid:OLD", "2026-05-01"), "closed": "2026-05-01"}}
+    rows = {"A": {**WIN_ROW, "cltrMngNo": "A"},                                    # 진행 중 → 낙찰
+            "B": {**WIN_ROW, "cltrMngNo": "B", "pbctStatCd": "0011", "pbctStatNm": "유찰"},  # 진행 중 유찰
+            "NEW": {**WIN_ROW, "cltrMngNo": "NEW"},                                # 처음 보는 낙찰
+            "NEWFAIL": {**WIN_ROW, "cltrMngNo": "NEWFAIL", "pbctStatCd": "0011"}}  # 처음 보는 유찰 → 무시
+    extra = [{"id": "board:r1", "src": "GH", "kind": "결과공고", "title": "결과", "end": "2026-09-25",
+              "res": {"stat": "결과공고", "opbd": "2026-09-25"}}]
+    import collect
+    act, arch = collect.build(active, prev, archive, rows, extra, "2026-09-30 09:00", today, 90)
+    act_ids = {r["id"] for r in act}
+    arch_by = {r["id"]: r for r in arch}
+    assert act_ids == {"onbid:B"}
+    assert active["onbid:B"]["last"]["stat"] == "유찰"
+    assert arch_by["onbid:A"]["res"]["amt"] == 88200000 and arch_by["onbid:A"]["status"] == "낙찰"
+    assert "onbid:GONE" in arch_by and "lh:1" in arch_by  # 목록에서 빠짐 / 마감 지남
+    assert "onbid:NEW" in arch_by and "onbid:NEWFAIL" not in arch_by
+    assert "board:r1" in arch_by
+    assert "onbid:OLD" not in arch_by  # 90일 지남 → 삭제
 
 
 def test_board_menu_discovery_filters(monkeypatch):

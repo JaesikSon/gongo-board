@@ -25,6 +25,10 @@ EXCLUDE_RX = re.compile(
     r"채용|용역|시공|공사\s*입찰|물품|구매|제안|결과|낙찰자|계약\s*현황|임대주택|전세|행복주택|국민임대|"
     r"매입임대|청년|신혼|입주자\s*모집|당첨자|면접|교육|설명회\s*결과|개인정보|정정공고\s*결과"
 )
+# 매각·분양의 결과 공고 (낙찰자 공고, 개찰결과, 공급결과 등) → 보관함에 '결과공고'로 들어감
+RESULT_RX = re.compile(r"낙찰|개찰\s*결과|입찰\s*결과|매각\s*결과|공급\s*결과|분양\s*결과|계약\s*체결\s*결과")
+RESULT_EXCLUDE_RX = re.compile(r"채용|용역|시공|공사\s*입찰|물품|구매|임대주택|전세|행복주택|국민임대|매입임대|청년|신혼|당첨자|면접")
+WON_RX = re.compile(r"(\d[\d,]{4,})\s*원")
 MENU_RX = re.compile(r"분양|매각|판매|공급|공고|입찰")
 MENU_EXCLUDE_RX = re.compile(r"채용|용역|계약|정보공개|청렴|인권|윤리|고객|민원|임대주택")
 
@@ -68,7 +72,10 @@ def extract_notices(board_url: str, soup: BeautifulSoup, src: dict, since: str) 
     out = []
     for a in soup.find_all("a"):
         title = " ".join(a.get_text(" ", strip=True).split())
-        if len(title) < 6 or not SALE_RX.search(title) or EXCLUDE_RX.search(title):
+        if len(title) < 6 or not SALE_RX.search(title):
+            continue
+        is_result = bool(RESULT_RX.search(title)) and not RESULT_EXCLUDE_RX.search(title)
+        if not is_result and EXCLUDE_RX.search(title):
             continue
         row = a.find_parent(["tr", "li", "dl", "div"]) or a
         row_text = " ".join(row.get_text(" ", strip=True).split())
@@ -79,10 +86,10 @@ def extract_notices(board_url: str, soup: BeautifulSoup, src: dict, since: str) 
             continue
         link = _abs(board_url, a.get("href", "")) or board_url
         nid = hashlib.md5(f"{src['name']}|{title}|{posted}".encode()).hexdigest()[:12]
-        out.append({
+        rec = {
             "id": f"board:{nid}",
             "src": src["name"],
-            "kind": "공고",
+            "kind": "결과공고" if is_result else "공고",
             "title": title[:200],
             "org": src["name"],
             "ot": src.get("type", "지방공기업"),
@@ -94,7 +101,14 @@ def extract_notices(board_url: str, soup: BeautifulSoup, src: dict, since: str) 
             "posted": posted,
             "end": end,
             "url": link,
-        })
+        }
+        if is_result:
+            # 제목에 금액이 적혀 있으면(드묾) 낙찰가로 사용, 대부분은 원문 링크로 확인
+            m = WON_RX.search(title)
+            rec["res"] = {"stat": "결과공고", "amt": int(m.group(1).replace(",", "")) if m else None,
+                          "rate": None, "bidders": None, "opbd": posted, "nsq": ""}
+            rec["end"] = posted
+        out.append(rec)
     return out
 
 
