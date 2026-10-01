@@ -254,3 +254,20 @@ def test_zoning_text_and_vworld_parse():
     items = [{"id": "onbid:A", "kind": "물건", "pnu": "123", "zone": ""}]
     st = zoning.enrich(items, {"onbid:A": {"zone": "준주거", "zone_src": "vworld"}}, log=lambda *_: None)
     assert items[0]["zone"] == "준주거" and st["ok"]
+
+
+def test_dev_onbid_jimok_and_lh_titles():
+    from common import is_dev_title, is_land_record
+    base = {"kind": "물건", "ot": "지자체", "prpt": "공유재산", "title": "x", "area": 20000}
+    assert is_land_record({**base, "usage": "토지 > 대지"})
+    assert is_land_record({**base, "usage": "토지 > 잡종지"})
+    assert not is_land_record({**base, "usage": "토지 > 임야"})
+    assert not is_land_record({**base, "usage": "토지 > 과수원"})
+    assert is_land_record({**base, "usage": "토지 > 답", "title": "OO지구 공동주택용지(답)"})
+    # 2026-10-01 실제 LH API 공고명
+    assert is_dev_title("성남복정1지구 도시지원시설용지 공급 공고")
+    assert is_dev_title("[중개알선대상토지포함]시흥권역 근린생활시설 및 일반상업용지 선착순 수의계약 공급공고")
+    assert not is_dev_title("시흥장현지구 블록형단독주택용지 공급공고(2순위)")
+    assert not is_dev_title("의왕월암 근린생활시설용지, 주차장용지 공급 공고")
+    assert not is_dev_title("남양주진접2 공공주택지구 공장이주대책용지 공급 공고")
+    assert not is_dev_title("시흥거모 공공주택지구 협의양도인택지(주거전용단독주택용지) 2차(최종) 공급공고")
