@@ -227,7 +227,7 @@ function chipsOf(r, arch){
   return [
     !arch && isNew(r) ? '<span class="chip new">신규</span>' : '',
     stChip,
-    r.cat ? `<span class="chip cat">${esc(r.cat)}</span>` : '',
+    r.cat ? `<span class="chip cat"${r.cat_src ? ` title="${esc(r.cat_src)} 기준으로 분류"` : ''}>${esc(r.cat)}${r.cat_src ? `<small style="opacity:.7"> · ${esc(r.cat_src)}</small>` : ''}</span>` : '',
     r.zone ? `<span class="chip zone">${esc(r.zone)}</span>` : '',
     (r.ot || r.src) ? `<span class="chip org">${esc(r.ot || r.src)}</span>` : '',
     r.sido ? `<span class="chip">${esc(r.sido)}</span>` : '',
