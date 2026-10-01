@@ -238,3 +238,19 @@ def test_dev_land_filters():
     recs = boards.extract_notices("https://ex.or.kr/", soup, {"name": "X"}, since="2026-01-01")
     assert [(r["title"], r["cat"]) for r in recs] == [("국민임대 공동주택용지 공급 공고", "공동주택"),
                                                       ("중심상업용지 입찰 공고", "상업·업무")]
+
+
+def test_zoning_text_and_vworld_parse():
+    from common import norm_zone, zone_of
+    import zoning
+    assert zone_of("OO지구 C1 (제2종일반주거지역) 공동주택용지") == "제2종일반주거"
+    assert zone_of("중심상업지역 내 상업용지") == "중심상업"
+    assert zone_of("준주거지역") == "준주거" and zone_of("준주거용지 C4-2") == ""   # 용지명만으로는 추정하지 않음
+    assert norm_zone("제3종일반주거지역") == "제3종일반주거" and norm_zone("자연녹지지역") == "자연녹지"
+    data = {"landCharacteristicss": {"field": [
+        {"stdrYear": "2024", "prposArea1Nm": "자연녹지지역"},
+        {"stdrYear": "2025", "prposArea1Nm": "제2종일반주거지역"}]}}
+    assert zoning.parse(data) == "제2종일반주거"
+    items = [{"id": "onbid:A", "kind": "물건", "pnu": "123", "zone": ""}]
+    st = zoning.enrich(items, {"onbid:A": {"zone": "준주거", "zone_src": "vworld"}}, log=lambda *_: None)
+    assert items[0]["zone"] == "준주거" and st["ok"]
