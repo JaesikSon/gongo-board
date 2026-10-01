@@ -136,8 +136,9 @@ CAT_RULES = [
     ("상업·업무", re.compile(r"상업\s*용지|상업\s*지역|중심\s*상업|일반\s*상업|업무\s*(시설\s*)?용지|도시\s*지원\s*시설|자족\s*(시설|기능)|지식\s*산업\s*센터\s*용지")),
 ]
 GENERIC_SUPPLY_RX = re.compile(r"(토지|용지|택지|부지|필지)\s*(을\s*)?(공급|매각|분양|입찰|공매)|잔여\s*(토지|용지|필지)|체비지|보류지|공공\s*택지")
-SMALL_USE_RX = re.compile(r"단독\s*주택|점포\s*겸용|근린\s*생활|주차\s*장|종교|주유소|유치원|의료\s*시설|농지|임야|창고|이주자|협의\s*양도|생활\s*대책|공장\s*용지|산업\s*시설\s*용지")
+SMALL_USE_RX = re.compile(r"단독\s*주택|점포\s*겸용|근린\s*생활|주차\s*장|종교|주유소|유치원|의료\s*시설|농지|임야|창고|이주자|이주\s*대책|협의\s*양도|생활\s*대책|공장|산업\s*시설\s*용지")
 NOT_LAND_TITLE_RX = re.compile(r"아파트\s*(분양|잔여|입주|임대)|오피스텔|상가\s*(분양|공급|입찰)|점포\s*(분양|임대)|입주자\s*모집|주택\s*분양")
+DEV_JIMOK = {"대지", "잡종지"}
 PUBLIC_OT = {"LH", "SH", "지방공기업", "지자체", "국가기관", "캠코", "기타공공"}
 
 
@@ -181,7 +182,9 @@ def is_dev_onbid(rec: dict) -> bool:
         return False
     if dev_category(rec.get("title", ""), rec.get("usage", "")):
         return True
-    return (rec.get("area") or 0) >= MIN_AREA
+    # 용지 키워드가 없으면: 지목이 대지·잡종지인 대형 필지만 (임야·전·답·과수원 등 제외)
+    jimok = ((rec.get("usage") or "").split(" > ") + [""])[1].strip()
+    return jimok in DEV_JIMOK and (rec.get("area") or 0) >= MIN_AREA
 
 
 def is_land_record(r: dict) -> bool:
