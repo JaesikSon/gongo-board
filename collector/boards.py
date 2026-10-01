@@ -18,7 +18,7 @@ from urllib.parse import urljoin, urlparse
 import yaml
 from bs4 import BeautifulSoup
 
-from common import LAND_ONLY, dev_category, zone_of, env, find_dates, http_get, is_land_title, now_kst, sido_of
+from common import LAND_ONLY, dev_category, org_type, zone_of, env, find_dates, http_get, is_land_title, now_kst, sido_of
 
 SALE_RX = re.compile(r"매각|공매|분양|수의계약|용지|택지|토지\s*공급|부지|필지|체비지|보류지|상가\s*공급|잔여\s*(토지|용지|필지|상가)")
 EXCLUDE_RX = re.compile(
@@ -31,6 +31,7 @@ RESULT_RX = re.compile(r"낙찰|개찰\s*결과|입찰\s*결과|매각\s*결과|
 RESULT_EXCLUDE_RX = re.compile(r"채용|용역|시공|(?<!도시)(?<!개발)공사\s*입찰|물품|구매|임대주택|전세|행복주택|국민임대|매입임대|청년|신혼|당첨자|면접")
 WON_RX = re.compile(r"(\d[\d,]{4,})\s*원")
 MENU_RX = re.compile(r"분양|매각|판매|공급|공고|입찰")
+FILE_RX = re.compile(r"\.(hwp|hwpx|pdf|xlsx?|docx?|zip|jpg|png)\b|\(\s*[\d.]+\s*[KMG]B\s*\)", re.I)
 MENU_EXCLUDE_RX = re.compile(r"채용|용역|계약|정보공개|청렴|인권|윤리|고객|민원|임대주택")
 
 
@@ -73,8 +74,8 @@ def extract_notices(board_url: str, soup: BeautifulSoup, src: dict, since: str) 
     out = []
     for a in soup.find_all("a"):
         title = " ".join(a.get_text(" ", strip=True).split())
-        if len(title) < 6 or not SALE_RX.search(title):
-            continue
+        if len(title) < 6 or not SALE_RX.search(title) or FILE_RX.search(title):
+            continue  # 첨부파일 이름은 공고가 아님
         if LAND_ONLY and not is_land_title(title):
             continue
         is_result = bool(RESULT_RX.search(title)) and not RESULT_EXCLUDE_RX.search(title)
@@ -88,6 +89,8 @@ def extract_notices(board_url: str, soup: BeautifulSoup, src: dict, since: str) 
         dates = find_dates(row_text)
         posted = dates[0] if dates else ""
         end = dates[-1] if len(dates) > 1 and dates[-1] > dates[0] else ""
+        if not posted and "공고" not in title:
+            continue  # 날짜도 '공고'도 없는 링크는 메뉴(예: '택지 분양절차')
         if posted and posted < since:
             continue
         link = _abs(board_url, a.get("href", "")) or board_url
@@ -98,7 +101,7 @@ def extract_notices(board_url: str, soup: BeautifulSoup, src: dict, since: str) 
             "kind": "결과공고" if is_result else "공고",
             "title": title[:200],
             "org": src["name"],
-            "ot": src.get("type", "지방공기업"),
+            "ot": org_type(src["name"]) or src.get("type", "기타공공"),
             "sido": src.get("sido") or sido_of(src["name"], title),
             "addr": "",
             "prpt": "",
@@ -118,6 +121,28 @@ def extract_notices(board_url: str, soup: BeautifulSoup, src: dict, since: str) 
             rec["end"] = posted
         out.append(rec)
     return out
+
+
+def classify_by_body(recs: list[dict], boards: list[str], limit: int = 15) -> int:
+    """제목만으로 용도를 모르는 공고는 상세 페이지 본문을 읽어 분류한다."""
+    n = 0
+    targets = [r for r in recs if r["kind"] == "공고" and not r.get("cat")
+               and r["url"] not in boards and "download" not in r["url"].lower()]
+    for r in targets[:limit]:
+        try:
+            soup = _soup(r["url"])
+            for t in soup(["script", "style", "nav", "header", "footer"]):
+                t.decompose()
+            body = " ".join(soup.get_text(" ", strip=True).split())[:20000]
+        except Exception:  # noqa: BLE001
+            continue
+        cat = dev_category(body)
+        if cat:
+            r["cat"], r["cat_src"] = cat, "본문"
+            n += 1
+        if not r.get("zone"):
+            r["zone"] = zone_of(body)
+    return n
 
 
 def load_sources(path: Path) -> list[dict]:
@@ -141,7 +166,10 @@ def collect_one(src: dict, since: str, limit: int) -> tuple[list[dict], dict]:
                         recs.append(n)
             except Exception as e:  # noqa: BLE001
                 errs.append(f"{b}: {type(e).__name__}")
+        n_body = classify_by_body(recs, boards)
         msg = msg_prefix + f"공고 {len(recs)}건"
+        if n_body:
+            msg += f" (본문으로 용도 분류 {n_body}건)"
         if not boards:
             msg += " (게시판을 찾지 못함 — boards 에 URL 지정 필요)"
         elif not recs:

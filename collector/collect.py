@@ -25,7 +25,7 @@ import lh  # noqa: E402
 import onbid  # noqa: E402
 import results  # noqa: E402
 import zoning  # noqa: E402
-from common import LAND_ONLY, env, is_land_record, now_kst  # noqa: E402
+from common import LAND_ONLY, cat_from_zone, env, is_land_record, now_kst  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
 DATA = ROOT / "site" / "data"
@@ -161,6 +161,13 @@ def main() -> int:
         arch = [r for r in arch if is_land_record(r)]
     print("용도지역…")
     statuses.append(zoning.enrich(act, prev_items))
+    for r in act:  # 용지 키워드가 없는 온비드 대지는 용도지역으로 분류
+        if r.get("kind") == "물건" and not r.get("cat") and r.get("zone"):
+            c = cat_from_zone(r["zone"])
+            if c:
+                r["cat"], r["cat_src"] = c, "용도지역"
+    if LAND_ONLY:  # 용도지역이 녹지·관리·공업 등으로 확인된 물건 제외
+        act = [r for r in act if r.get("kind") != "물건" or is_land_record(r)]
 
     n_win = sum(1 for r in arch if (r.get("res") or {}).get("stat") == "낙찰")
     dump(OUT, {"updated": stamp, "total": len(act),
