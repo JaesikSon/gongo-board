@@ -192,3 +192,36 @@ def is_land_record(r: dict) -> bool:
     if r.get("src") == "LH" and not DEV_ONLY:
         return r.get("prpt") == "토지"
     return is_land_title(f'{r.get("title", "")} {r.get("usage", "")}'.strip())
+
+
+# ── 용도지역 ────────────────────────────────────────────────────────
+# 공고문·물건명에 적힌 용도지역을 읽는다. (정확한 값은 zoning.py 의 브이월드 조회가 덮어씀)
+ZONE_RULES = [
+    ("제1종전용주거", r"제\s*1\s*종\s*전용\s*주거"), ("제2종전용주거", r"제\s*2\s*종\s*전용\s*주거"),
+    ("제1종일반주거", r"제\s*1\s*종\s*일반\s*주거|1종\s*일반\s*주거"),
+    ("제2종일반주거", r"제\s*2\s*종\s*일반\s*주거|2종\s*일반\s*주거"),
+    ("제3종일반주거", r"제\s*3\s*종\s*일반\s*주거|3종\s*일반\s*주거"),
+    ("준주거", r"준\s*주거\s*지역"),
+    ("중심상업", r"중심\s*상업\s*지역"), ("일반상업", r"일반\s*상업\s*지역"),
+    ("근린상업", r"근린\s*상업\s*지역"), ("유통상업", r"유통\s*상업\s*지역"),
+    ("전용공업", r"전용\s*공업\s*지역"), ("일반공업", r"일반\s*공업\s*지역"), ("준공업", r"준\s*공업\s*지역"),
+    ("보전녹지", r"보전\s*녹지"), ("생산녹지", r"생산\s*녹지"), ("자연녹지", r"자연\s*녹지"),
+    ("계획관리", r"계획\s*관리\s*지역"), ("생산관리", r"생산\s*관리\s*지역"), ("보전관리", r"보전\s*관리\s*지역"),
+    ("농림", r"농림\s*지역"), ("자연환경보전", r"자연\s*환경\s*보전\s*지역"),
+]
+ZONE_RULES = [(n, re.compile(rx)) for n, rx in ZONE_RULES]
+
+
+def zone_of(*texts: str) -> str:
+    t = " ".join(x for x in texts if x)
+    for name, rx in ZONE_RULES:
+        if rx.search(t):
+            return name
+    return ""
+
+
+def norm_zone(name: str) -> str:
+    """브이월드 '제2종일반주거지역' → '제2종일반주거'."""
+    n = re.sub(r"\s+", "", name or "")
+    n = re.sub(r"지역$", "", n)
+    return zone_of(n + "지역") or n

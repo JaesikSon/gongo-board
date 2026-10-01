@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from datetime import timedelta
 
-from common import LAND_ONLY, dev_category, env, http_get, is_land_record, norm_date, now_kst, sido_of
+from common import LAND_ONLY, dev_category, zone_of, env, http_get, is_land_record, norm_date, now_kst, sido_of
 
 BASE = "https://apis.data.go.kr/B552555/lhLeaseNoticeInfo1/lhLeaseNoticeInfo1"
 TYPES = {"01": "토지"} if LAND_ONLY else {"01": "토지", "22": "상가"}
@@ -49,6 +49,7 @@ def parse(data, category: str) -> list[dict]:
             "end": norm_date(it.get("CLSG_DT")),
             "url": it.get("DTL_URL") or LH_LIST_URL,
             "cat": dev_category(it.get("PAN_NM") or "", it.get("AIS_TP_CD_NM") or ""),
+            "zone": zone_of(it.get("PAN_NM") or "", it.get("AIS_TP_CD_NM") or ""),
         })
     return [r for r in out if is_land_record(r)] if LAND_ONLY else out
 

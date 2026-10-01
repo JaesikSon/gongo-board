@@ -18,7 +18,7 @@ from urllib.parse import urljoin, urlparse
 import yaml
 from bs4 import BeautifulSoup
 
-from common import LAND_ONLY, dev_category, env, find_dates, http_get, is_land_title, now_kst, sido_of
+from common import LAND_ONLY, dev_category, zone_of, env, find_dates, http_get, is_land_title, now_kst, sido_of
 
 SALE_RX = re.compile(r"매각|공매|분양|수의계약|용지|택지|토지\s*공급|부지|필지|체비지|보류지|상가\s*공급|잔여\s*(토지|용지|필지|상가)")
 EXCLUDE_RX = re.compile(
@@ -108,6 +108,7 @@ def extract_notices(board_url: str, soup: BeautifulSoup, src: dict, since: str) 
             "end": end,
             "url": link,
             "cat": dev_category(title),
+            "zone": zone_of(title),
         }
         if is_result:
             # 제목에 금액이 적혀 있으면(드묾) 낙찰가로 사용, 대부분은 원문 링크로 확인

@@ -24,6 +24,7 @@ import boards  # noqa: E402
 import lh  # noqa: E402
 import onbid  # noqa: E402
 import results  # noqa: E402
+import zoning  # noqa: E402
 from common import LAND_ONLY, env, is_land_record, now_kst  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -158,6 +159,8 @@ def main() -> int:
     act, arch = build(active, prev_items, archive, rs["results"], board_results, stamp, today, keep_days)
     if LAND_ONLY:  # 결과 전용으로 새로 들어온 온비드 낙찰 레코드도 같은 기준으로 거름
         arch = [r for r in arch if is_land_record(r)]
+    print("용도지역…")
+    statuses.append(zoning.enrich(act, prev_items))
 
     n_win = sum(1 for r in arch if (r.get("res") or {}).get("stat") == "낙찰")
     dump(OUT, {"updated": stamp, "total": len(act),
