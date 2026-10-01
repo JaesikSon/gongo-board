@@ -11,7 +11,7 @@ from __future__ import annotations
 import time
 from datetime import timedelta
 
-from common import LAND_ONLY, env, http_get, is_land_usage, norm_date, now_kst, sido_of, to_int
+from common import LAND_ONLY, dev_category, env, http_get, is_land_record, is_land_usage, norm_date, now_kst, sido_of, to_int
 from onbid import DETAIL_URL, PRPT_DIVS, parse_response
 
 BASE = "https://apis.data.go.kr/B010003/OnbidCltrBidRsltListSrvc2/getCltrBidRsltList2"
@@ -114,6 +114,7 @@ def to_archive_record(r: dict) -> dict:
         "ratio": round(minp / apsl * 100, 1) if apsl and minp else None,
         "status": res["stat"], "bgn": "", "end": res["opbd"], "url": DETAIL_URL.format(no),
         "res": res,
+        "cat": dev_category(title),
     }
 
 

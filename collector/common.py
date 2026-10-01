@@ -123,10 +123,30 @@ def org_type(org: str) -> str:
     return "기타공공" if o else ""
 
 
-# ── 토지 전용 필터 ───────────────────────────────────────────────────
-LAND_ONLY = (env("LAND_ONLY", "true").lower() not in ("0", "false", "n", "no"))
-LAND_TITLE_RX = re.compile(r"토지|용지|부지|필지|택지|임야|대지|잡종지|농지|체비지|보류지")
-NOT_LAND_TITLE_RX = re.compile(r"아파트|오피스텔|주택\s*분양|상가\s*(분양|공급|입찰)|점포|근린생활시설\s*분양")
+# ── 개발용 공공택지 필터 ─────────────────────────────────────────────
+# 부동산 개발 검토용: 공동주택·주상복합/복합·상업/업무 용지만.
+# DEV_ONLY=false 로 두면 토지 전체(LAND_ONLY), 둘 다 false 면 부동산 전체.
+DEV_ONLY = env("DEV_ONLY", "true").lower() not in ("0", "false", "n", "no")
+LAND_ONLY = DEV_ONLY or env("LAND_ONLY", "true").lower() not in ("0", "false", "n", "no")
+MIN_AREA = float(env("MIN_AREA", "3000"))  # 온비드 물건: 용지 키워드가 없으면 이 면적(㎡) 이상만
+
+CAT_RULES = [
+    ("주상복합·복합", re.compile(r"주상\s*복합|복합\s*용지|복합\s*개발|복합\s*시설\s*용지|준\s*주거")),
+    ("공동주택", re.compile(r"공동\s*주택|아파트\s*용지|연립\s*주택\s*용지|주택\s*건설\s*용지|공공\s*주택\s*용지|임대\s*주택\s*용지")),
+    ("상업·업무", re.compile(r"상업\s*용지|상업\s*지역|중심\s*상업|일반\s*상업|업무\s*(시설\s*)?용지|도시\s*지원\s*시설|자족\s*(시설|기능)|지식\s*산업\s*센터\s*용지")),
+]
+GENERIC_SUPPLY_RX = re.compile(r"(토지|용지|택지|부지|필지)\s*(을\s*)?(공급|매각|분양|입찰|공매)|잔여\s*(토지|용지|필지)|체비지|보류지|공공\s*택지")
+SMALL_USE_RX = re.compile(r"단독\s*주택|점포\s*겸용|근린\s*생활|주차\s*장|종교|주유소|유치원|의료\s*시설|농지|임야|창고|이주자|협의\s*양도|생활\s*대책|공장\s*용지|산업\s*시설\s*용지")
+NOT_LAND_TITLE_RX = re.compile(r"아파트\s*(분양|잔여|입주|임대)|오피스텔|상가\s*(분양|공급|입찰)|점포\s*(분양|임대)|입주자\s*모집|주택\s*분양")
+PUBLIC_OT = {"LH", "SH", "지방공기업", "지자체", "국가기관", "캠코", "기타공공"}
+
+
+def dev_category(*texts: str) -> str:
+    t = " ".join(x for x in texts if x)
+    for name, rx in CAT_RULES:
+        if rx.search(t):
+            return name
+    return ""
 
 
 def is_land_usage(mcls: str, scls: str = "") -> bool:
@@ -134,14 +154,41 @@ def is_land_usage(mcls: str, scls: str = "") -> bool:
     return "토지" in (mcls or "")
 
 
-def is_land_title(title: str) -> bool:
+def is_dev_title(title: str) -> bool:
+    """LH·공사 공고 제목: 개발용지가 명시됐거나, 용도 미표기 일반 토지공급 공고(소규모 용도 제외)."""
     t = title or ""
-    return bool(LAND_TITLE_RX.search(t)) and not NOT_LAND_TITLE_RX.search(t)
+    if NOT_LAND_TITLE_RX.search(t):
+        return False
+    if dev_category(t):
+        return True
+    return bool(GENERIC_SUPPLY_RX.search(t)) and not SMALL_USE_RX.search(t)
+
+
+def is_land_title(title: str) -> bool:
+    return is_dev_title(title) if DEV_ONLY else bool(re.search(r"토지|용지|부지|필지|택지|임야|대지|잡종지|체비지|보류지", title or "")) and not NOT_LAND_TITLE_RX.search(title or "")
+
+
+def is_dev_onbid(rec: dict) -> bool:
+    """온비드 물건: 공공기관이 파는 토지 중 개발용지 키워드가 있거나 대형(MIN_AREA 이상)."""
+    if (rec.get("usage") or "").split(" > ")[0].strip() != "토지":
+        return False
+    if rec.get("prpt") == "압류재산":
+        return False
+    ot = rec.get("ot") or ""
+    if ot and ot not in PUBLIC_OT:
+        return False
+    if not ot and rec.get("prpt") not in ("국유재산", "공유재산"):  # 기관명 모르는 결과 전용 레코드
+        return False
+    if dev_category(rec.get("title", ""), rec.get("usage", "")):
+        return True
+    return (rec.get("area") or 0) >= MIN_AREA
 
 
 def is_land_record(r: dict) -> bool:
     if r.get("kind") == "물건":
+        if DEV_ONLY:
+            return is_dev_onbid(r)
         return (r.get("usage") or "").split(" > ")[0].strip() == "토지"
-    if r.get("src") == "LH":
+    if r.get("src") == "LH" and not DEV_ONLY:
         return r.get("prpt") == "토지"
-    return is_land_title(r.get("title", ""))
+    return is_land_title(f'{r.get("title", "")} {r.get("usage", "")}'.strip())

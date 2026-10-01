@@ -132,7 +132,7 @@ def main() -> int:
     prev_arch = load(ARCH)
     archive = {r["id"]: r for r in prev_arch.get("items", [])}
 
-    if LAND_ONLY:  # 토지 전용으로 바꾸기 전에 쌓인 토지 외 항목 정리
+    if LAND_ONLY:  # 기준을 바꾸기 전에 쌓인 대상 외 항목 정리
         prev_items = {k: v for k, v in prev_items.items() if is_land_record(v)}
         archive = {k: v for k, v in archive.items() if is_land_record(v)}
 
@@ -156,6 +156,8 @@ def main() -> int:
 
     active = merge_active(by_source, prev_items, stamp)
     act, arch = build(active, prev_items, archive, rs["results"], board_results, stamp, today, keep_days)
+    if LAND_ONLY:  # 결과 전용으로 새로 들어온 온비드 낙찰 레코드도 같은 기준으로 거름
+        arch = [r for r in arch if is_land_record(r)]
 
     n_win = sum(1 for r in arch if (r.get("res") or {}).get("stat") == "낙찰")
     dump(OUT, {"updated": stamp, "total": len(act),

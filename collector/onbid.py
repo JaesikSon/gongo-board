@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import time
 
-from common import LAND_ONLY, env, http_get, is_land_usage, norm_date, now_kst, org_type, sido_of, to_int
+from common import LAND_ONLY, dev_category, env, http_get, is_land_record, is_land_usage, norm_date, now_kst, org_type, sido_of, to_int
 
 BASE = "https://apis.data.go.kr/B010003/OnbidRlstListSrvc2/getRlstCltrList2"
 DETAIL_URL = "https://www.onbid.co.kr/op/cta/ctaDetail.do?cltrMngNo={}"
@@ -166,7 +166,9 @@ def to_records(raw: list[dict], now=None) -> list[dict]:
             "pvct": pvct and not live,
             "url": DETAIL_URL.format(no),
         })
-    return out
+    for rec in out:
+        rec["cat"] = dev_category(rec["title"], rec["usage"])
+    return [r for r in out if is_land_record(r)] if LAND_ONLY else out
 
 
 def collect(log=print) -> dict:
