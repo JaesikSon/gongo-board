@@ -26,7 +26,10 @@ def test_norm_date():
 def test_org_type_and_sido():
     assert org_type("한국토지주택공사 경기남부지역본부") == "LH"
     assert org_type("서울주택도시개발공사") == "SH"
-    assert org_type("화성도시공사") == "지방공기업"
+    assert org_type("화성도시공사") == "기초 도시공사"
+    assert org_type("경기주택도시공사") == "GH" and org_type("인천도시공사") == "iH"
+    assert org_type("대구도시개발공사") == "광역 도시·개발공사" and org_type("충청남도개발공사") == "광역 도시·개발공사"
+    assert org_type("부산도시공사") == "광역 도시·개발공사" and org_type("하남도시공사") == "기초 도시공사"
     assert org_type("한국자산관리공사") == "캠코"
     assert org_type("무궁화신탁") == "신탁사"
     assert org_type("수원시") == "지자체"
@@ -58,7 +61,7 @@ def test_onbid_groups_current_round_and_filters():
     r = recs[0]
     assert r["minp"] == 90000000 and r["ratio"] == 90.0
     assert r["status"] == "입찰진행중"
-    assert r["ot"] == "지방공기업" and r["sido"] == "경기"
+    assert r["ot"] == "기초 도시공사" and r["sido"] == "경기"
     assert r["end"] == "2026-10-01 17:00"
     assert "cltrMngNo=A1" in r["url"]
 
@@ -78,11 +81,11 @@ def test_onbid_real_response_shape_and_placeholder_dates():
     assert onbid.to_records(items, now=NOW) == []  # 상가(근린생활시설)는 토지 전용에서 제외
     items[0].update(cltrUsgMclsCtgrNm="토지", cltrUsgSclsCtgrNm="대지")
     assert onbid.to_records(items, now=NOW) == []  # 신탁사 물건은 개발용지 모드에서 제외
-    items[0].update(orgNm="화성도시공사", landSqms=6000.123)
+    items[0].update(orgNm="화성도시공사", landSqms=6000.123, onbidCltrNm="경기도 평택시 장당동 483-6 대지")
     r = onbid.to_records(items, now=NOW)[0]
     assert r["bgn"] == "" and r["end"] == ""
     assert r["apsl"] == 256000000 and r["minp"] == 373248000
-    assert r["ot"] == "지방공기업" and r["sido"] == "경기" and r["area"] == 6000.12
+    assert r["ot"] == "기초 도시공사" and r["sido"] == "경기" and r["area"] == 6000.12
     assert r["status"] == "입찰준비중" and r["fails"] == 1
 
 
@@ -271,3 +274,31 @@ def test_dev_onbid_jimok_and_lh_titles():
     assert not is_dev_title("의왕월암 근린생활시설용지, 주차장용지 공급 공고")
     assert not is_dev_title("남양주진접2 공공주택지구 공장이주대책용지 공급 공고")
     assert not is_dev_title("시흥거모 공공주택지구 협의양도인택지(주거전용단독주택용지) 2차(최종) 공급공고")
+
+
+def test_board_junk_and_new_org_types():
+    soup = BeautifulSoup('''<ul>
+<li><a href="/f/1">1. [공고문] 장성 한옥 및 토지 매각.hwp (95.0KB)</a></li>
+<li><a href="/menu">택지 분양절차</a></li>
+<li><a href="/v/2">울산미포국가산업단지 부곡용연지구 지원시설용지 분양 공고</a> 2026-09-20</li>
+<li><a href="/v/3">에코델타시티 연구시설용지 분양공고(추첨)</a> 2026-09-20</li>
+<li><a href="/v/4">2026년 제3차 토지 공급 공고</a> 2026-09-21</li>
+</ul>''', "html.parser")
+    recs = boards.extract_notices("https://www.ex.or.kr/b", soup, {"name": "부산도시공사", "type": "지방공기업"}, since="2026-01-01")
+    assert [r["title"] for r in recs] == ["2026년 제3차 토지 공급 공고"]
+    assert recs[0]["ot"] == "광역 도시·개발공사"
+
+
+def test_classify_by_body_and_zone(monkeypatch):
+    from common import cat_from_zone, is_land_record
+    html = "<html><body><nav>메뉴 상업용지</nav><div>A-3블록 공동주택용지 1필지 공급, 제3종일반주거지역</div></body></html>"
+    monkeypatch.setattr(boards, "_soup", lambda url: BeautifulSoup(html, "html.parser"))
+    recs = [{"kind": "공고", "url": "https://ex.or.kr/v/1", "cat": "", "zone": ""}]
+    assert boards.classify_by_body(recs, ["https://ex.or.kr/b"]) == 1
+    assert recs[0]["cat"] == "공동주택" and recs[0]["zone"] == "제3종일반주거"
+    assert cat_from_zone("제2종일반주거") == "공동주택" and cat_from_zone("일반상업") == "상업·업무"
+    assert cat_from_zone("준주거") == "주상복합·복합" and cat_from_zone("자연녹지") == ""
+    lot = {"kind": "물건", "usage": "토지 > 대지", "ot": "지자체", "prpt": "공유재산", "title": "x", "area": 9000}
+    assert is_land_record({**lot, "zone": "자연녹지", "zone_src": "vworld"}) is False
+    assert is_land_record({**lot, "zone": "제2종일반주거", "zone_src": "vworld"}) is True
+    assert is_land_record({**lot, "title": "블록형단독주택용지 A6"}) is False
