@@ -121,3 +121,27 @@ def org_type(org: str) -> str:
         if rx.search(o):
             return name
     return "기타공공" if o else ""
+
+
+# ── 토지 전용 필터 ───────────────────────────────────────────────────
+LAND_ONLY = (env("LAND_ONLY", "true").lower() not in ("0", "false", "n", "no"))
+LAND_TITLE_RX = re.compile(r"토지|용지|부지|필지|택지|임야|대지|잡종지|농지|체비지|보류지")
+NOT_LAND_TITLE_RX = re.compile(r"아파트|오피스텔|주택\s*분양|상가\s*(분양|공급|입찰)|점포|근린생활시설\s*분양")
+
+
+def is_land_usage(mcls: str, scls: str = "") -> bool:
+    """온비드 용도 중분류가 '토지' (대지·전·답·임야·잡종지 등)."""
+    return "토지" in (mcls or "")
+
+
+def is_land_title(title: str) -> bool:
+    t = title or ""
+    return bool(LAND_TITLE_RX.search(t)) and not NOT_LAND_TITLE_RX.search(t)
+
+
+def is_land_record(r: dict) -> bool:
+    if r.get("kind") == "물건":
+        return (r.get("usage") or "").split(" > ")[0].strip() == "토지"
+    if r.get("src") == "LH":
+        return r.get("prpt") == "토지"
+    return is_land_title(r.get("title", ""))

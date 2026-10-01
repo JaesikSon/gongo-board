@@ -38,6 +38,7 @@ def _row(no, nsq, bgn, end, **kw):
     base = {"cltrMngNo": no, "pbctNsq": nsq, "cltrBidBgngDt": bgn, "cltrBidEndDt": end,
             "onbidCltrNm": "경기도 화성시 동탄 토지", "lctnSdnm": "경기도", "lctnSggnm": "화성시",
             "orgNm": "화성도시공사", "prptDivNm": "기타일반재산", "dspsMthodNm": "매각",
+            "cltrUsgMclsCtgrNm": "토지", "cltrUsgSclsCtgrNm": "대지",
             "apslEvlAmt": "100000000", "lowstBidPrcIndctCont": "90000000", "pbctStatCd": "0002",
             "pbctStatNm": "0002", "landSqms": "330.5", "pvctTrgtYn": "N"}
     base.update(kw)
@@ -74,6 +75,8 @@ def test_onbid_real_response_shape_and_placeholder_dates():
          "pbctStatCd": "0001", "pbctStatNm": "입찰준비중"}]}, "numOfRows": 3, "pageNo": 1, "totalCount": 14733}}
     items, err = onbid.parse_response(data)
     assert err is None and len(items) == 1
+    assert onbid.to_records(items, now=NOW) == []  # 상가(근린생활시설)는 토지 전용에서 제외
+    items[0].update(cltrUsgMclsCtgrNm="토지", cltrUsgSclsCtgrNm="대지")
     r = onbid.to_records(items, now=NOW)[0]
     assert r["bgn"] == "" and r["end"] == ""
     assert r["apsl"] == 256000000 and r["minp"] == 373248000
@@ -143,8 +146,8 @@ def test_board_result_posts_are_marked():
 
 
 # 2026-10-01 실제 입찰결과 API 응답에서 발췌
-WIN_ROW = {"cltrMngNo": "2025-0900-063750", "prptDivNm": "기타일반재산", "cltrUsgMclsCtgrNm": "주거용건물",
-           "cltrUsgSclsCtgrNm": "단독주택", "onbidCltrNm": "강원특별자치도 정선군 고한읍 고한리 124-19 단독주택",
+WIN_ROW = {"cltrMngNo": "2025-0900-063750", "prptDivNm": "기타일반재산", "cltrUsgMclsCtgrNm": "토지",
+           "cltrUsgSclsCtgrNm": "대지", "onbidCltrNm": "강원특별자치도 정선군 고한읍 고한리 124-19 단독주택",
            "landSqms": 152, "bldSqms": 82.85, "pbctNsq": "1", "apslEvlAmt": 136952000,
            "lowstBidPrcIndctCont": "86279400", "cltrOpbdDt": "202609301000", "pbctStatCd": "0010",
            "pbctStatNm": "낙찰", "scfbAmt": "88200000", "vldBddrNope": 1, "apslPrcCtrsScfbPrcRto": 64.4,
@@ -171,13 +174,14 @@ def test_latest_by_item_keeps_newest_round():
 
 
 def _act(id_, end, **kw):
-    return {"id": id_, "src": "온비드", "kind": "물건", "title": id_, "end": end, "first_seen": "x", **kw}
+    return {"id": id_, "src": "온비드", "kind": "물건", "title": id_, "end": end, "first_seen": "x",
+            "usage": "토지 > 대지", **kw}
 
 
 def test_build_archive_flow():
     today = NOW.strftime("%Y-%m-%d")
     prev = {"onbid:A": _act("onbid:A", "2026-10-02 17:00"), "onbid:GONE": _act("onbid:GONE", "2026-10-05"),
-            "lh:1": {**_act("lh:1", "2026-09-29"), "src": "LH", "kind": "공고"}}
+            "lh:1": {**_act("lh:1", "2026-09-29"), "src": "LH", "kind": "공고", "prpt": "토지"}}
     active = {"onbid:A": _act("onbid:A", "2026-10-02 17:00"), "onbid:B": _act("onbid:B", "2026-10-03"),
               "lh:1": {**_act("lh:1", "2026-09-29"), "src": "LH", "kind": "공고"}}
     archive = {"onbid:OLD": {**_act("onbid:OLD", "2026-05-01"), "closed": "2026-05-01"}}
@@ -206,3 +210,16 @@ def test_board_menu_discovery_filters(monkeypatch):
     monkeypatch.setattr(boards, "_soup", lambda url: BeautifulSoup(html, "html.parser"))
     got = boards.discover_boards("https://www.ex.or.kr", 5)
     assert got == ["https://www.ex.or.kr/sale/land.do", "https://www.ex.or.kr/notice.do"]
+
+
+def test_land_only_filters():
+    from common import is_land_record, is_land_title
+    assert is_land_title("화성동탄2 상업용지 공급공고") and is_land_title("잔여 필지 수의계약")
+    assert not is_land_title("아파트 잔여세대 분양") and not is_land_title("단지 내 상가 입찰 공고")
+    assert is_land_record({"kind": "물건", "usage": "토지 > 임야"})
+    assert not is_land_record({"kind": "물건", "usage": "주거용건물 > 아파트"})
+    assert not is_land_record({"kind": "공고", "src": "LH", "prpt": "상가", "title": "상가"})
+    soup = BeautifulSoup('<ul><li><a href="a">아파트 분양 공고</a> 2026-09-20</li>'
+                         '<li><a href="b">택지 매각 공고</a> 2026-09-20</li></ul>', "html.parser")
+    recs = boards.extract_notices("https://ex.or.kr/", soup, {"name": "X"}, since="2026-01-01")
+    assert [r["title"] for r in recs] == ["택지 매각 공고"]

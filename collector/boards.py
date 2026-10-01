@@ -18,7 +18,7 @@ from urllib.parse import urljoin, urlparse
 import yaml
 from bs4 import BeautifulSoup
 
-from common import env, find_dates, http_get, now_kst, sido_of
+from common import LAND_ONLY, env, find_dates, http_get, is_land_title, now_kst, sido_of
 
 SALE_RX = re.compile(r"매각|공매|분양|수의계약|용지\s*공급|토지\s*공급|부지|필지|상가\s*공급|잔여\s*(토지|용지|필지|상가)")
 EXCLUDE_RX = re.compile(
@@ -73,6 +73,8 @@ def extract_notices(board_url: str, soup: BeautifulSoup, src: dict, since: str) 
     for a in soup.find_all("a"):
         title = " ".join(a.get_text(" ", strip=True).split())
         if len(title) < 6 or not SALE_RX.search(title):
+            continue
+        if LAND_ONLY and not is_land_title(title):
             continue
         is_result = bool(RESULT_RX.search(title)) and not RESULT_EXCLUDE_RX.search(title)
         if not is_result and EXCLUDE_RX.search(title):

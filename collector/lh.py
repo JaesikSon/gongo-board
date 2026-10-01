@@ -10,10 +10,10 @@ from __future__ import annotations
 
 from datetime import timedelta
 
-from common import env, http_get, norm_date, now_kst, sido_of
+from common import LAND_ONLY, env, http_get, norm_date, now_kst, sido_of
 
 BASE = "https://apis.data.go.kr/B552555/lhLeaseNoticeInfo1/lhLeaseNoticeInfo1"
-TYPES = {"01": "토지", "22": "상가"}
+TYPES = {"01": "토지"} if LAND_ONLY else {"01": "토지", "22": "상가"}
 LH_LIST_URL = "https://apply.lh.co.kr/lh/lndLs/selectWrtancList.do"
 
 

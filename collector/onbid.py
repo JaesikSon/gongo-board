@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import time
 
-from common import env, http_get, norm_date, now_kst, org_type, sido_of, to_int
+from common import LAND_ONLY, env, http_get, is_land_usage, norm_date, now_kst, org_type, sido_of, to_int
 
 BASE = "https://apis.data.go.kr/B010003/OnbidRlstListSrvc2/getRlstCltrList2"
 DETAIL_URL = "https://www.onbid.co.kr/op/cta/ctaDetail.do?cltrMngNo={}"
@@ -114,6 +114,8 @@ def to_records(raw: list[dict], now=None) -> list[dict]:
         pool = live or rounds
         cur = sorted(pool, key=lambda r: _key_dt(r.get("cltrBidBgngDt")) or "9" * 12)[0]
 
+        if LAND_ONLY and not is_land_usage(cur.get("cltrUsgMclsCtgrNm"), cur.get("cltrUsgSclsCtgrNm")):
+            continue
         dsps = cur.get("dspsMthodNm") or ""
         if "임대" in dsps:
             continue

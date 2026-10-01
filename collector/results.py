@@ -11,7 +11,7 @@ from __future__ import annotations
 import time
 from datetime import timedelta
 
-from common import env, http_get, norm_date, now_kst, sido_of, to_int
+from common import LAND_ONLY, env, http_get, is_land_usage, norm_date, now_kst, sido_of, to_int
 from onbid import DETAIL_URL, PRPT_DIVS, parse_response
 
 BASE = "https://apis.data.go.kr/B010003/OnbidCltrBidRsltListSrvc2/getCltrBidRsltList2"
@@ -148,6 +148,8 @@ def collect(first_run: bool, log=print) -> dict:
     if not errors or "SERVICE_KEY" not in errors[0]:
         sweep(lookback, "")
     days = backfill if first_run else lookback
+    if LAND_ONLY:
+        rows = [x for x in rows if is_land_usage(x.get("cltrUsgMclsCtgrNm"), x.get("cltrUsgSclsCtgrNm"))]
     best = latest_by_item(rows)
     n_win = sum(1 for r in best.values() if to_result(r)["stat"] == "낙찰")
     msg = f"최근 {days}일 개찰 {len(rows)}행 → 물건 {len(best)}건 (낙찰 {n_win})"

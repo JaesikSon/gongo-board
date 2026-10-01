@@ -24,7 +24,7 @@ import boards  # noqa: E402
 import lh  # noqa: E402
 import onbid  # noqa: E402
 import results  # noqa: E402
-from common import env, now_kst  # noqa: E402
+from common import LAND_ONLY, env, is_land_record, now_kst  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
 DATA = ROOT / "site" / "data"
@@ -131,6 +131,10 @@ def main() -> int:
     prev_items = {r["id"]: r for r in prev.get("items", [])}
     prev_arch = load(ARCH)
     archive = {r["id"]: r for r in prev_arch.get("items", [])}
+
+    if LAND_ONLY:  # 토지 전용으로 바꾸기 전에 쌓인 토지 외 항목 정리
+        prev_items = {k: v for k, v in prev_items.items() if is_land_record(v)}
+        archive = {k: v for k, v in archive.items() if is_land_record(v)}
 
     print(f"[{stamp} KST] 수집 시작")
     srcs = []
