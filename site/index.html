@@ -30,14 +30,16 @@ h1{font-size:24px;margin:0 0 4px;letter-spacing:-.02em}
 .tab[aria-pressed=true]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
 .tab .n{opacity:.65;margin-left:4px;font-size:13px}
 .filters{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px;display:grid;
-  grid-template-columns:2fr repeat(5,1fr);gap:8px}
+  grid-template-columns:repeat(4,1fr);gap:8px}
+.filters .q{grid-column:span 2}
 .filters input,.filters select{width:100%;padding:9px 10px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink);font:inherit;font-size:14px}
 .toggles{display:flex;gap:14px;flex-wrap:wrap;grid-column:1/-1;font-size:14px;color:var(--muted);align-items:center}
 .toggles label{display:flex;gap:6px;align-items:center;cursor:pointer;white-space:nowrap}
 .filters .toggles input[type=checkbox]{width:auto;margin:0;accent-color:var(--accent)}
 .toggles .sp{flex:1}
 .price{display:flex;gap:6px;align-items:center}
-.price input{width:110px}
+.price input{width:96px}
+.price select{width:auto;padding:9px 6px}
 .count{margin:14px 2px 8px;color:var(--muted);font-size:14px;display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap}
 .list{display:flex;flex-direction:column;gap:8px}
 .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px 16px;display:grid;grid-template-columns:1fr auto;gap:6px 18px}
@@ -51,6 +53,7 @@ h1{font-size:24px;margin:0 0 4px;letter-spacing:-.02em}
 .chip.new{background:var(--new-soft);color:var(--new);font-weight:500}
 .chip.win{background:var(--accent-soft);color:var(--accent);font-weight:700}
 .chip.cat{background:var(--new-soft);color:var(--new);font-weight:500}
+.chip.zone{background:var(--chip);color:var(--ink);font-weight:500;border:1px solid var(--line)}
 .chip.hot{background:var(--warn-soft);color:var(--warn);font-weight:500}
 .right{text-align:right;white-space:nowrap}
 .money{font-weight:700;font-size:16px;font-variant-numeric:tabular-nums}
@@ -95,6 +98,7 @@ footer{color:var(--muted);font-size:12.5px;margin-top:18px;line-height:1.6}
     <input class="q" id="q" type="search" placeholder="검색: 지구명, 블록, 주소, 기관명 (예: 검단 AA, 동탄2 C-3)">
     <select id="sido"><option value="">전체 지역</option></select>
     <select id="ot"><option value="">전체 기관유형</option></select>
+    <select id="zone"><option value="">전체 용도지역</option></select>
     <select id="jimok"><option value="">전체 지목</option></select>
     <select id="cat"><option value="">전체 용지유형</option></select>
     <select id="sort">
@@ -118,7 +122,8 @@ footer{color:var(--muted);font-size:12.5px;margin-top:18px;line-height:1.6}
         <option value="취소">취소</option><option value="결과공고">기관 결과공고</option><option value="none">결과 미확인</option>
       </select></span>
       <span class="sp"></span>
-      <span class="price"><span id="plabel">최저가</span> <input id="pmin" type="number" inputmode="numeric" placeholder="최소(만원)"> ~ <input id="pmax" type="number" inputmode="numeric" placeholder="최대(만원)"></span>
+      <span class="price"><span id="plabel">최저가</span> <input id="pmin" type="number" inputmode="decimal" placeholder="최소"> ~ <input id="pmax" type="number" inputmode="decimal" placeholder="최대">
+        <select id="punit" aria-label="금액 단위"><option value="1000">천원</option><option value="1000000" selected>백만원</option><option value="100000000">억원</option></select></span>
     </div>
   </div>
 
@@ -159,6 +164,7 @@ const isNew = r => DATA.updated && r.first_seen === DATA.updated && DATA.new_cou
 const resStat = r => (r.res && r.res.stat) || 'none';
 const closedOn = r => ((r.res && r.res.opbd) || r.end || r.closed || r.posted || '').slice(0,10);
 const price = r => isArch() && r.res && r.res.amt != null ? r.res.amt : r.minp;
+const zoneOf = r => r.zone || '용도지역 미확인';
 const jimok = r => r.kind === '물건' ? ((r.usage || '').split(' > ')[1] || '') : '';
 const source = () => isArch() ? (ARCH ? ARCH.items : []) : DATA.items;
 
@@ -176,18 +182,20 @@ function refreshSelects(){
   fillSelect('sido', items.map(r => r.sido));
   fillSelect('ot', items.map(r => r.ot));
   fillSelect('cat', items.map(r => r.cat || '용도 미표기'));
+  fillSelect('zone', items.map(zoneOf));
   fillSelect('jimok', items.map(jimok));
 }
 
 function filtered(){
   const q = $('#q').value.trim().toLowerCase().split(/\s+/).filter(Boolean);
-  const sido = $('#sido').value, ot = $('#ot').value, cat = $('#cat').value, res = $('#res').value, jm = $('#jimok').value;
+  const sido = $('#sido').value, ot = $('#ot').value, cat = $('#cat').value, res = $('#res').value, jm = $('#jimok').value, zn = $('#zone').value;
   const onlyNew = $('#onlyNew').checked, soon = $('#soon').checked, hidePvct = $('#hidePvct').checked;
-  const pmin = +$('#pmin').value * 1e4 || 0, pmax = +$('#pmax').value * 1e4 || Infinity;
+  const unit = +$('#punit').value || 1e6;
+  const pmin = +$('#pmin').value * unit || 0, pmax = +$('#pmax').value * unit || Infinity;
   const arch = isArch();
   let rows = source().filter(r =>
     (arch || tab === 'all' || r.kind === tab) &&
-    (!sido || r.sido === sido) && (!ot || r.ot === ot) && (!cat || (r.cat || '용도 미표기') === cat) && (!jm || jimok(r) === jm) &&
+    (!sido || r.sido === sido) && (!ot || r.ot === ot) && (!cat || (r.cat || '용도 미표기') === cat) && (!jm || jimok(r) === jm) && (!zn || zoneOf(r) === zn) &&
     (arch ? (!res || resStat(r) === res)
           : (!onlyNew || isNew(r)) && (!hidePvct || !r.pvct) && (!soon || (dday(r.end) !== null && dday(r.end) <= 7))) &&
     ((pmin === 0 && pmax === Infinity) || (price(r) != null && price(r) >= pmin && price(r) <= pmax)) &&
@@ -220,6 +228,7 @@ function chipsOf(r, arch){
     !arch && isNew(r) ? '<span class="chip new">신규</span>' : '',
     stChip,
     r.cat ? `<span class="chip cat">${esc(r.cat)}</span>` : '',
+    r.zone ? `<span class="chip zone">${esc(r.zone)}</span>` : '',
     (r.ot || r.src) ? `<span class="chip org">${esc(r.ot || r.src)}</span>` : '',
     r.sido ? `<span class="chip">${esc(r.sido)}</span>` : '',
     r.prpt ? `<span class="chip">${esc(r.prpt)}</span>` : '',
@@ -281,7 +290,7 @@ function render(){
   $('#more').hidden = rows.length <= shown;
   $('#more').textContent = `더 보기 (${Math.max(0, rows.length - shown).toLocaleString()}건 남음)`;
   const u = new URLSearchParams();
-  ['q','sido','ot','cat','jimok','sort','res'].forEach(k => { const v = $('#'+k).value; if (v && !(k==='sort'&&(v==='end'||v==='recent'))) u.set(k,v); });
+  ['q','sido','ot','cat','zone','jimok','sort','res'].forEach(k => { const v = $('#'+k).value; if (v && !(k==='sort'&&(v==='end'||v==='recent'))) u.set(k,v); });
   if (tab !== 'all') u.set('tab', tab);
   history.replaceState(null, '', u.toString() ? '?' + u : location.pathname);
 }
@@ -315,7 +324,7 @@ async function load(){
   const p = new URLSearchParams(location.search);
   if (p.get('tab')) setTab(p.get('tab'), false);
   refreshSelects();
-  ['q','sido','ot','cat','jimok','sort','res'].forEach(k => { if (p.get(k)) $('#'+k).value = p.get(k); });
+  ['q','sido','ot','cat','zone','jimok','sort','res'].forEach(k => { if (p.get(k)) $('#'+k).value = p.get(k); });
   renderStatus(); render();
 }
 
@@ -333,7 +342,7 @@ function setTab(t, r=true){
 document.querySelectorAll('.tab').forEach(b => b.onclick = () => setTab(b.dataset.tab));
 let timer;
 ['q','pmin','pmax'].forEach(id => $('#'+id).addEventListener('input', () => { clearTimeout(timer); timer = setTimeout(() => { shown = PAGE; render(); }, 180); }));
-['sido','ot','cat','jimok','sort','res','onlyNew','soon','hidePvct'].forEach(id => $('#'+id).addEventListener('change', () => { shown = PAGE; render(); }));
+['sido','ot','cat','zone','jimok','punit','sort','res','onlyNew','soon','hidePvct'].forEach(id => $('#'+id).addEventListener('change', () => { shown = PAGE; render(); }));
 $('#more').onclick = () => { shown += PAGE; render(); };
 load();
 </script>
