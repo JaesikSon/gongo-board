@@ -1,0 +1,69 @@
+name: 매각공고 수집·배포
+
+on:
+  schedule:
+    # GitHub cron 은 UTC 기준: 22:55 UTC = 07:55 KST, 08:55 UTC = 17:55 KST
+    - cron: "55 22 * * *"
+    - cron: "55 8 * * *"
+  workflow_dispatch: {}
+  push:
+    branches: [main]
+    paths: ["site/**", "collector/**", ".github/workflows/**"]
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: collect
+  cancel-in-progress: false
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - run: pip install -r requirements.txt pytest
+
+      - name: 테스트
+        run: python -m pytest tests -q
+
+      - name: 수집
+        if: github.event_name != 'push'
+        env:
+          ONBID_API_KEY: ${{ secrets.ONBID_API_KEY }}
+          LH_API_KEY: ${{ secrets.LH_API_KEY }}
+          ONBID_INCLUDE_PVCT: ${{ vars.ONBID_INCLUDE_PVCT || 'false' }}
+        run: python collector/collect.py
+
+      - name: 수집 결과 저장(커밋)
+        if: github.event_name != 'push'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add site/data/notices.json
+          git diff --cached --quiet || git commit -m "데이터 갱신 $(TZ=Asia/Seoul date '+%Y-%m-%d %H:%M')"
+          git push
+
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+  deploy:
+    needs: collect
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
