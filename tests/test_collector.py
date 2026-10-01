@@ -40,7 +40,7 @@ def _row(no, nsq, bgn, end, **kw):
             "orgNm": "화성도시공사", "prptDivNm": "기타일반재산", "dspsMthodNm": "매각",
             "cltrUsgMclsCtgrNm": "토지", "cltrUsgSclsCtgrNm": "대지",
             "apslEvlAmt": "100000000", "lowstBidPrcIndctCont": "90000000", "pbctStatCd": "0002",
-            "pbctStatNm": "0002", "landSqms": "330.5", "pvctTrgtYn": "N"}
+            "pbctStatNm": "0002", "landSqms": "5200.5", "pvctTrgtYn": "N"}
     base.update(kw)
     return base
 
@@ -77,10 +77,12 @@ def test_onbid_real_response_shape_and_placeholder_dates():
     assert err is None and len(items) == 1
     assert onbid.to_records(items, now=NOW) == []  # 상가(근린생활시설)는 토지 전용에서 제외
     items[0].update(cltrUsgMclsCtgrNm="토지", cltrUsgSclsCtgrNm="대지")
+    assert onbid.to_records(items, now=NOW) == []  # 신탁사 물건은 개발용지 모드에서 제외
+    items[0].update(orgNm="화성도시공사", landSqms=6000.123)
     r = onbid.to_records(items, now=NOW)[0]
     assert r["bgn"] == "" and r["end"] == ""
     assert r["apsl"] == 256000000 and r["minp"] == 373248000
-    assert r["ot"] == "신탁사" and r["sido"] == "경기" and r["area"] == 62.45
+    assert r["ot"] == "지방공기업" and r["sido"] == "경기" and r["area"] == 6000.12
     assert r["status"] == "입찰준비중" and r["fails"] == 1
 
 
@@ -212,14 +214,27 @@ def test_board_menu_discovery_filters(monkeypatch):
     assert got == ["https://www.ex.or.kr/sale/land.do", "https://www.ex.or.kr/notice.do"]
 
 
-def test_land_only_filters():
-    from common import is_land_record, is_land_title
-    assert is_land_title("화성동탄2 상업용지 공급공고") and is_land_title("잔여 필지 수의계약")
-    assert not is_land_title("아파트 잔여세대 분양") and not is_land_title("단지 내 상가 입찰 공고")
-    assert is_land_record({"kind": "물건", "usage": "토지 > 임야"})
-    assert not is_land_record({"kind": "물건", "usage": "주거용건물 > 아파트"})
-    assert not is_land_record({"kind": "공고", "src": "LH", "prpt": "상가", "title": "상가"})
+def test_dev_land_filters():
+    from common import dev_category, is_dev_title, is_land_record
+    assert dev_category("화성동탄2 C-3블록 주상복합용지 공급") == "주상복합·복합"
+    assert dev_category("평택고덕 A-12BL 공동주택용지 공급공고") == "공동주택"
+    assert dev_category("세종 4-1 업무시설용지 매각") == "상업·업무"
+    assert is_dev_title("2026년 제3차 토지 공급 공고")           # 용도 미표기 일반 공고는 포함
+    assert not is_dev_title("단독주택용지(점포겸용) 추첨 공급")    # 소규모 용도 제외
+    assert not is_dev_title("근린생활시설용지 입찰")
+    assert not is_dev_title("아파트 잔여세대 분양")
+    base = {"kind": "물건", "usage": "토지 > 대지", "ot": "지방공기업", "prpt": "공유재산", "title": "x"}
+    assert is_land_record({**base, "area": 3500})
+    assert not is_land_record({**base, "area": 800})
+    assert is_land_record({**base, "area": 800, "title": "OO지구 공동주택용지"})
+    assert not is_land_record({**base, "area": 9000, "ot": "신탁사"})
+    assert not is_land_record({**base, "area": 9000, "prpt": "압류재산"})
+    assert not is_land_record({**base, "area": 9000, "usage": "주거용건물 > 아파트"})
+    assert is_land_record({"kind": "공고", "src": "LH", "title": "인천검단 AA-30 공공주택용지 공급", "usage": ""})
     soup = BeautifulSoup('<ul><li><a href="a">아파트 분양 공고</a> 2026-09-20</li>'
-                         '<li><a href="b">택지 매각 공고</a> 2026-09-20</li></ul>', "html.parser")
+                         '<li><a href="b">국민임대 공동주택용지 공급 공고</a> 2026-09-20</li>'
+                         '<li><a href="c">중심상업용지 입찰 공고</a> 2026-09-20</li>'
+                         '<li><a href="d">이주자택지 공급 안내</a> 2026-09-20</li></ul>', "html.parser")
     recs = boards.extract_notices("https://ex.or.kr/", soup, {"name": "X"}, since="2026-01-01")
-    assert [r["title"] for r in recs] == ["택지 매각 공고"]
+    assert [(r["title"], r["cat"]) for r in recs] == [("국민임대 공동주택용지 공급 공고", "공동주택"),
+                                                      ("중심상업용지 입찰 공고", "상업·업무")]
