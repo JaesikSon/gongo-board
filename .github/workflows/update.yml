@@ -3,10 +3,11 @@ name: 매각공고 수집·배포
 on:
   schedule:
     # 하루 3회: 08:00 / 14:00 / 18:00 KST  (GitHub cron 은 UTC = KST-9시간)
+    # 정각은 GitHub 서버가 붐벼 지연될 수 있어 5분 앞당김
     - cron: "55 22 * * *"
     - cron: "55 4 * * *"
     - cron: "55 8 * * *"
-  workflow_dispatch: {}
+  workflow_dispatch: {}   # Actions 탭에서 'Run workflow' 로 수동 실행
   push:
     branches: [main]
     paths: ["site/**", "collector/**", ".github/workflows/**"]
@@ -26,6 +27,8 @@ jobs:
     timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: main   # 실행 시작 시점의 최신 데이터에서 출발
 
       - uses: actions/setup-python@v5
         with:
@@ -44,6 +47,9 @@ jobs:
           LH_API_KEY: ${{ secrets.LH_API_KEY }}
           VWORLD_KEY: ${{ secrets.VWORLD_KEY }}
           ONBID_INCLUDE_PVCT: ${{ vars.ONBID_INCLUDE_PVCT || 'false' }}
+          DEV_ONLY: ${{ vars.DEV_ONLY || 'true' }}
+          LAND_ONLY: ${{ vars.LAND_ONLY || 'true' }}
+          MIN_AREA: ${{ vars.MIN_AREA || '3000' }}
         run: python collector/collect.py
 
       - name: 수집 결과 저장(커밋)
@@ -52,9 +58,15 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add site/data/
-          git diff --cached --quiet || git commit -m "데이터 갱신 $(TZ=Asia/Seoul date '+%Y-%m-%d %H:%M')"
-          git pull --rebase --autostash || true
-          git push
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m "데이터 갱신 $(TZ=Asia/Seoul date '+%Y-%m-%d %H:%M')"
+          # 그 사이 다른 커밋이 올라왔으면 이번 수집 결과를 우선해 합친 뒤 올림 (최대 3회)
+          for i in 1 2 3; do
+            if git pull --rebase -X theirs origin main && git push origin HEAD:main; then exit 0; fi
+            git rebase --abort 2>/dev/null || true
+            sleep 5
+          done
+          exit 1
 
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
