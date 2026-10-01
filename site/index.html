@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>공공 매각공고 모아보기</title>
-<meta name="description" content="온비드·LH·SH·도시공사 매각공고를 하루 2회 모아 보여줍니다">
+<title>공공택지 개발용지 공고</title>
+<meta name="description" content="LH·SH·GH·도시공사·온비드의 공동주택·복합·상업업무 용지 공급공고를 하루 3회 모아 보여줍니다">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
 <style>
@@ -30,7 +30,7 @@ h1{font-size:24px;margin:0 0 4px;letter-spacing:-.02em}
 .tab[aria-pressed=true]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
 .tab .n{opacity:.65;margin-left:4px;font-size:13px}
 .filters{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px;display:grid;
-  grid-template-columns:2fr repeat(4,1fr);gap:8px}
+  grid-template-columns:2fr repeat(5,1fr);gap:8px}
 .filters input,.filters select{width:100%;padding:9px 10px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink);font:inherit;font-size:14px}
 .toggles{display:flex;gap:14px;flex-wrap:wrap;grid-column:1/-1;font-size:14px;color:var(--muted);align-items:center}
 .toggles label{display:flex;gap:6px;align-items:center;cursor:pointer;white-space:nowrap}
@@ -50,6 +50,7 @@ h1{font-size:24px;margin:0 0 4px;letter-spacing:-.02em}
 .chip.org{background:var(--accent-soft);color:var(--accent)}
 .chip.new{background:var(--new-soft);color:var(--new);font-weight:500}
 .chip.win{background:var(--accent-soft);color:var(--accent);font-weight:700}
+.chip.cat{background:var(--new-soft);color:var(--new);font-weight:500}
 .chip.hot{background:var(--warn-soft);color:var(--warn);font-weight:500}
 .right{text-align:right;white-space:nowrap}
 .money{font-weight:700;font-size:16px;font-variant-numeric:tabular-nums}
@@ -79,22 +80,23 @@ footer{color:var(--muted);font-size:12.5px;margin-top:18px;line-height:1.6}
 </head>
 <body>
 <header>
-  <h1>공공 매각공고 모아보기</h1>
+  <h1>공공택지 개발용지 공고</h1>
   <div class="sub" id="sub">불러오는 중…</div>
 </header>
 <div class="wrap">
   <div class="tabs" role="group" aria-label="구분">
     <button class="tab" data-tab="all" aria-pressed="true">전체<span class="n" id="n-all"></span></button>
-    <button class="tab" data-tab="물건" aria-pressed="false">온비드 물건<span class="n" id="n-thing"></span></button>
-    <button class="tab" data-tab="공고" aria-pressed="false">LH·SH·공사 공고<span class="n" id="n-notice"></span></button>
+    <button class="tab" data-tab="물건" aria-pressed="false">온비드 대형토지<span class="n" id="n-thing"></span></button>
+    <button class="tab" data-tab="공고" aria-pressed="false">LH·SH·공사 공급공고<span class="n" id="n-notice"></span></button>
     <button class="tab" data-tab="arch" aria-pressed="false">종료·낙찰<span class="n" id="n-arch"></span></button>
   </div>
 
   <div class="filters">
-    <input class="q" id="q" type="search" placeholder="검색: 주소, 물건명, 기관명 (예: 동탄 상업용지)">
+    <input class="q" id="q" type="search" placeholder="검색: 지구명, 블록, 주소, 기관명 (예: 검단 AA, 동탄2 C-3)">
     <select id="sido"><option value="">전체 지역</option></select>
     <select id="ot"><option value="">전체 기관유형</option></select>
-    <select id="prpt"><option value="">전체 재산유형</option></select>
+    <select id="jimok"><option value="">전체 지목</option></select>
+    <select id="cat"><option value="">전체 용지유형</option></select>
     <select id="sort">
       <option class="live-only" value="end">마감 임박순</option>
       <option class="live-only" value="new">최근 등록순</option>
@@ -127,6 +129,7 @@ footer{color:var(--muted);font-size:12.5px;margin-top:18px;line-height:1.6}
   <details class="status" id="status"><summary>수집 상태</summary><div id="st"></div></details>
   <footer>
     매일 오전 8시·오후 2시·오후 6시(한국시간)에 자동 갱신됩니다. 종료된 공고는 종료일로부터 <span id="keep">90</span>일 동안 '종료·낙찰' 탭에 남습니다.
+    대상: 공동주택·주상복합/복합·준주거·상업/업무 용지 (온비드는 공공기관 매각 토지 중 해당 용지이거나 3,000㎡ 이상).
     출처: 온비드 OpenAPI(물건목록·입찰결과, 한국자산관리공사), LH 분양임대공고 OpenAPI, 각 기관 홈페이지 게시판.
     낙찰가는 온비드 물건만 제공되며, LH·도시공사 자체 공고는 기관이 게시한 결과공고 링크로 확인할 수 있습니다.
     공고 내용은 요약 정보이며, 입찰 전 반드시 원문 공고를 확인하세요.
@@ -156,6 +159,7 @@ const isNew = r => DATA.updated && r.first_seen === DATA.updated && DATA.new_cou
 const resStat = r => (r.res && r.res.stat) || 'none';
 const closedOn = r => ((r.res && r.res.opbd) || r.end || r.closed || r.posted || '').slice(0,10);
 const price = r => isArch() && r.res && r.res.amt != null ? r.res.amt : r.minp;
+const jimok = r => r.kind === '물건' ? ((r.usage || '').split(' > ')[1] || '') : '';
 const source = () => isArch() ? (ARCH ? ARCH.items : []) : DATA.items;
 
 function fillSelect(id, values){
@@ -171,18 +175,19 @@ function refreshSelects(){
   const items = source();
   fillSelect('sido', items.map(r => r.sido));
   fillSelect('ot', items.map(r => r.ot));
-  fillSelect('prpt', items.map(r => r.prpt));
+  fillSelect('cat', items.map(r => r.cat || '용도 미표기'));
+  fillSelect('jimok', items.map(jimok));
 }
 
 function filtered(){
   const q = $('#q').value.trim().toLowerCase().split(/\s+/).filter(Boolean);
-  const sido = $('#sido').value, ot = $('#ot').value, prpt = $('#prpt').value, res = $('#res').value;
+  const sido = $('#sido').value, ot = $('#ot').value, cat = $('#cat').value, res = $('#res').value, jm = $('#jimok').value;
   const onlyNew = $('#onlyNew').checked, soon = $('#soon').checked, hidePvct = $('#hidePvct').checked;
   const pmin = +$('#pmin').value * 1e4 || 0, pmax = +$('#pmax').value * 1e4 || Infinity;
   const arch = isArch();
   let rows = source().filter(r =>
     (arch || tab === 'all' || r.kind === tab) &&
-    (!sido || r.sido === sido) && (!ot || r.ot === ot) && (!prpt || r.prpt === prpt) &&
+    (!sido || r.sido === sido) && (!ot || r.ot === ot) && (!cat || (r.cat || '용도 미표기') === cat) && (!jm || jimok(r) === jm) &&
     (arch ? (!res || resStat(r) === res)
           : (!onlyNew || isNew(r)) && (!hidePvct || !r.pvct) && (!soon || (dday(r.end) !== null && dday(r.end) <= 7))) &&
     ((pmin === 0 && pmax === Infinity) || (price(r) != null && price(r) >= pmin && price(r) <= pmax)) &&
@@ -214,6 +219,7 @@ function chipsOf(r, arch){
   return [
     !arch && isNew(r) ? '<span class="chip new">신규</span>' : '',
     stChip,
+    r.cat ? `<span class="chip cat">${esc(r.cat)}</span>` : '',
     (r.ot || r.src) ? `<span class="chip org">${esc(r.ot || r.src)}</span>` : '',
     r.sido ? `<span class="chip">${esc(r.sido)}</span>` : '',
     r.prpt ? `<span class="chip">${esc(r.prpt)}</span>` : '',
@@ -275,7 +281,7 @@ function render(){
   $('#more').hidden = rows.length <= shown;
   $('#more').textContent = `더 보기 (${Math.max(0, rows.length - shown).toLocaleString()}건 남음)`;
   const u = new URLSearchParams();
-  ['q','sido','ot','prpt','sort','res'].forEach(k => { const v = $('#'+k).value; if (v && !(k==='sort'&&(v==='end'||v==='recent'))) u.set(k,v); });
+  ['q','sido','ot','cat','jimok','sort','res'].forEach(k => { const v = $('#'+k).value; if (v && !(k==='sort'&&(v==='end'||v==='recent'))) u.set(k,v); });
   if (tab !== 'all') u.set('tab', tab);
   history.replaceState(null, '', u.toString() ? '?' + u : location.pathname);
 }
@@ -309,7 +315,7 @@ async function load(){
   const p = new URLSearchParams(location.search);
   if (p.get('tab')) setTab(p.get('tab'), false);
   refreshSelects();
-  ['q','sido','ot','prpt','sort','res'].forEach(k => { if (p.get(k)) $('#'+k).value = p.get(k); });
+  ['q','sido','ot','cat','jimok','sort','res'].forEach(k => { if (p.get(k)) $('#'+k).value = p.get(k); });
   renderStatus(); render();
 }
 
@@ -327,7 +333,7 @@ function setTab(t, r=true){
 document.querySelectorAll('.tab').forEach(b => b.onclick = () => setTab(b.dataset.tab));
 let timer;
 ['q','pmin','pmax'].forEach(id => $('#'+id).addEventListener('input', () => { clearTimeout(timer); timer = setTimeout(() => { shown = PAGE; render(); }, 180); }));
-['sido','ot','prpt','sort','res','onlyNew','soon','hidePvct'].forEach(id => $('#'+id).addEventListener('change', () => { shown = PAGE; render(); }));
+['sido','ot','cat','jimok','sort','res','onlyNew','soon','hidePvct'].forEach(id => $('#'+id).addEventListener('change', () => { shown = PAGE; render(); }));
 $('#more').onclick = () => { shown += PAGE; render(); };
 load();
 </script>
