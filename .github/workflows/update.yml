@@ -42,6 +42,7 @@ jobs:
         env:
           ONBID_API_KEY: ${{ secrets.ONBID_API_KEY }}
           LH_API_KEY: ${{ secrets.LH_API_KEY }}
+          VWORLD_KEY: ${{ secrets.VWORLD_KEY }}
           ONBID_INCLUDE_PVCT: ${{ vars.ONBID_INCLUDE_PVCT || 'false' }}
         run: python collector/collect.py
 
