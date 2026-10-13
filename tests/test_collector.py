@@ -43,7 +43,8 @@ def _row(no, nsq, bgn, end, **kw):
             "orgNm": "화성도시공사", "prptDivNm": "기타일반재산", "dspsMthodNm": "매각",
             "cltrUsgMclsCtgrNm": "토지", "cltrUsgSclsCtgrNm": "대지",
             "apslEvlAmt": "100000000", "lowstBidPrcIndctCont": "90000000", "pbctStatCd": "0002",
-            "pbctStatNm": "0002", "landSqms": "5200.5", "pvctTrgtYn": "N"}
+            "pbctStatNm": "0002", "landSqms": "5200.5", "pvctTrgtYn": "N",
+            "onbidCltrno": 1, "onbidPbancNo": 2, "pbctNo": 3, "pbctCdtnNo": 4, "prptDivCd": "0005"}
     base.update(kw)
     return base
 
@@ -63,7 +64,7 @@ def test_onbid_groups_current_round_and_filters():
     assert r["status"] == "입찰진행중"
     assert r["ot"] == "기초 도시공사" and r["sido"] == "경기"
     assert r["end"] == "2026-10-01 17:00"
-    assert "cltrMngNo=A1" in r["url"]
+    assert r["url"].startswith(onbid.DETAIL_BASE) and "pbctCdtnNo=" in r["url"]
 
 
 def test_onbid_real_response_shape_and_placeholder_dates():
@@ -302,3 +303,11 @@ def test_classify_by_body_and_zone(monkeypatch):
     assert is_land_record({**lot, "zone": "자연녹지", "zone_src": "vworld"}) is False
     assert is_land_record({**lot, "zone": "제2종일반주거", "zone_src": "vworld"}) is True
     assert is_land_record({**lot, "title": "블록형단독주택용지 A6"}) is False
+
+
+def test_onbid_detail_url_new_format():
+    row = {"onbidCltrno": 2065354, "onbidPbancNo": 907822, "pbctNo": 10106135, "pbctCdtnNo": 6229934, "prptDivCd": "0005"}
+    assert onbid.detail_url(row) == (
+        "https://www.onbid.co.kr/op/cltrpbancinf/cltrdtl/CltrDtlController/mvmnCltrDtl.do"
+        "?cltrScrnGrpCd=0001&cltrPrptDivCd=0005&onbidCltrno=2065354&onbidPbancNo=907822&pbctNo=10106135&pbctCdtnNo=6229934")
+    assert onbid.detail_url({"onbidCltrno": 1}) == onbid.SEARCH_URL
