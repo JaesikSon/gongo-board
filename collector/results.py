@@ -12,7 +12,7 @@ import time
 from datetime import timedelta
 
 from common import LAND_ONLY, dev_category, zone_of, env, http_get, is_land_record, is_land_usage, norm_date, now_kst, sido_of, to_int
-from onbid import DETAIL_URL, PRPT_DIVS, parse_response
+from onbid import PRPT_DIVS, detail_url, parse_response
 
 BASE = "https://apis.data.go.kr/B010003/OnbidCltrBidRsltListSrvc2/getCltrBidRsltList2"
 
@@ -112,7 +112,7 @@ def to_archive_record(r: dict) -> dict:
         "usage": " > ".join(filter(None, [r.get("cltrUsgMclsCtgrNm"), r.get("cltrUsgSclsCtgrNm")])),
         "area": round(area, 2) if area else None, "apsl": apsl, "minp": minp,
         "ratio": round(minp / apsl * 100, 1) if apsl and minp else None,
-        "status": res["stat"], "bgn": "", "end": res["opbd"], "url": DETAIL_URL.format(no),
+        "status": res["stat"], "bgn": "", "end": res["opbd"], "url": detail_url(r),
         "res": res,
         "cat": dev_category(title),
         "zone": zone_of(title),

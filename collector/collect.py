@@ -100,6 +100,8 @@ def build(active: dict[str, dict], prev_items: dict, archive: dict[str, dict],
             else:
                 active[rid]["last"] = res  # 직전 회차 결과(유찰 등) — 진행 중이므로 정보로만
         elif rid in archive:
+            if "ctaDetail.do" in (archive[rid].get("url") or ""):  # 예전(작동 안 하는) 주소 교체
+                archive[rid]["url"] = onbid.detail_url(row)
             old = (archive[rid].get("res") or {}).get("opbd") or ""
             if res["opbd"] >= old:
                 archive[rid]["res"] = res
@@ -133,6 +135,9 @@ def main() -> int:
     prev_arch = load(ARCH)
     archive = {r["id"]: r for r in prev_arch.get("items", [])}
 
+    for r in archive.values():  # 예전 온비드 주소는 열리지 않으므로 물건 목록으로
+        if "ctaDetail.do" in (r.get("url") or ""):
+            r["url"] = onbid.SEARCH_URL
     if LAND_ONLY:  # 기준을 바꾸기 전에 쌓인 대상 외 항목 정리
         prev_items = {k: v for k, v in prev_items.items() if is_land_record(v)}
         archive = {k: v for k, v in archive.items() if is_land_record(v)}

@@ -11,7 +11,19 @@ import time
 from common import LAND_ONLY, dev_category, zone_of, env, http_get, is_land_record, is_land_usage, norm_date, now_kst, org_type, sido_of, to_int
 
 BASE = "https://apis.data.go.kr/B010003/OnbidRlstListSrvc2/getRlstCltrList2"
-DETAIL_URL = "https://www.onbid.co.kr/op/cta/ctaDetail.do?cltrMngNo={}"
+DETAIL_BASE = "https://www.onbid.co.kr/op/cltrpbancinf/cltrdtl/CltrDtlController/mvmnCltrDtl.do"
+SEARCH_URL = "https://www.onbid.co.kr/op/cltrpbancinf/clbtcltrclg/cltrclbtcltrclg/CltrClbtCltrClgController/mvmnCltrRlstClg.do"
+
+
+def detail_url(row: dict) -> str:
+    """차세대 온비드 물건 상세 주소 (2026-10 확인). 필요한 번호가 없으면 부동산 물건 목록으로."""
+    keys = ("onbidCltrno", "onbidPbancNo", "pbctNo", "pbctCdtnNo")
+    vals = {k: str(row.get(k) or "") for k in keys}
+    if not all(vals.values()):
+        return SEARCH_URL
+    q = "&".join([f"cltrScrnGrpCd=0001", f"cltrPrptDivCd={row.get('prptDivCd') or row.get('cltrPrptDivCd') or ''}"]
+                 + [f"{k}={v}" for k, v in vals.items()])
+    return f"{DETAIL_BASE}?{q}"
 
 # 재산유형코드: 목록 API에 실제 데이터가 있는 코드 (압류·기타일반·국유·공유 등).
 # 이름은 응답의 prptDivNm 을 그대로 쓴다.
@@ -164,7 +176,7 @@ def to_records(raw: list[dict], now=None) -> list[dict]:
             "bgn": _real_date(cur.get("cltrBidBgngDt")),
             "end": _real_date(cur.get("cltrBidEndDt")),
             "pvct": pvct and not live,
-            "url": DETAIL_URL.format(no),
+            "url": detail_url(cur),
             "pnu": str(cur.get("ltnoPnu") or ""),
         })
     for rec in out:
