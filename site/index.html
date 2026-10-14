@@ -96,7 +96,13 @@ table.pt td.num{text-align:right}
 .files a{max-width:100%;overflow-wrap:anywhere;font-size:12.5px;border:1px solid var(--line);border-radius:6px;padding:2px 8px;text-decoration:none;background:var(--bg)}
 .files a:hover{border-color:var(--accent);color:var(--accent)}
 .files a b{font-weight:500;color:var(--accent);margin-right:4px}
-.ai ul{margin:4px 0 0;padding-left:18px;font-size:13px}
+.ai ul{margin:0;padding-left:18px;font-size:13px}
+.blk{border:1px solid var(--line);border-radius:8px;padding:10px 12px;margin-top:6px;background:var(--bg)}
+.bh{font-weight:700;margin-bottom:6px}
+.kv{display:grid;grid-template-columns:max-content minmax(0,1fr);gap:4px 14px;font-size:13.5px}
+.kv>span:nth-child(odd){color:var(--muted)}
+.kv .em{font-weight:700;color:var(--accent)}
+@media (max-width:520px){.kv{grid-template-columns:1fr}.kv>span:nth-child(odd){margin-top:6px}}
 .hint{font-size:12.5px;color:var(--muted);margin-top:6px}
 footer{color:var(--muted);font-size:12.5px;margin-top:18px;line-height:1.6}
 @media (max-width:760px){
@@ -304,14 +310,14 @@ function sumPanel(r){
   const ai = r.ai || {};
   let plan;
   if (ai.blocks && ai.blocks.length) {
-    const ac = [['블록', b => esc(b.block)], ['용도', b => esc(b.use)], ['허용용도', b => esc(b.allowed), 'wrap'], ['불허용도', b => esc(b.banned), 'wrap'],
-      ['건폐율', b => esc(b.bcr)], ['용적률', b => esc(b.far)], ['최고층수', b => esc(b.floors)], ['최고높이', b => esc(b.height), 'wrap'],
-      ['세대·규모', b => esc(b.units), 'wrap'], ['기타 주요 규제', b => (b.other||[]).map(esc).join('<br>'), 'wrap'], ['근거', b => esc(b.pages)]]
-      .filter(([, f]) => ai.blocks.some(b => f(b)));
-    plan = `<div class="sb ai"><h4>지구단위계획 인허가 제한 <span class="small">(AI 요약 · ${esc((ai.src||[]).join(', '))})</span></h4>
-      <div class="tw"><table class="pt"><tr>${ac.map(c => `<th>${c[0]}</th>`).join('')}</tr>
-      ${ai.blocks.map(b => `<tr>${ac.map(c => `<td class="${c[2]||''}">${c[1](b)}</td>`).join('')}</tr>`).join('')}</table></div>
-      ${(ai.common||[]).length ? `<ul>${ai.common.map(x => `<li>${esc(x)}</li>`).join('')}</ul>` : ''}
+    const F = [['허용용도','allowed'],['불허용도','banned'],['건폐율','bcr'],['용적률','far'],['최고층수','floors'],['최고높이','height'],['세대·규모','units']];
+    plan = `<div class="sb ai"><h4>지구단위계획 인허가 제한 <span class="small">(AI 요약${ai.model && ai.model.includes('시연') ? ' · API 설정 전 견본' : ''})</span></h4>
+      ${ai.blocks.map(b => `<div class="blk"><div class="bh">${esc(b.block)}${b.use ? ` <span class="small">${esc(b.use)}</span>` : ''}</div>
+        <div class="kv">${F.filter(([,k]) => b[k]).map(([l,k]) => `<span>${l}</span><span${/far|bcr|height|floors/.test(k) ? ' class="em"' : ''}>${esc(b[k])}</span>`).join('')}
+        ${(b.other||[]).length ? `<span>주요 규제</span><span><ul>${b.other.map(x => `<li>${esc(x)}</li>`).join('')}</ul></span>` : ''}
+        ${b.pages ? `<span>근거</span><span class="small">${esc(b.pages)}</span>` : ''}</div></div>`).join('')}
+      ${(ai.common||[]).length ? `<div class="blk"><div class="bh">지구 공통·공고 유의사항</div><ul>${ai.common.map(x => `<li>${esc(x)}</li>`).join('')}</ul></div>` : ''}
+      ${(ai.src||[]).length ? `<div class="hint">읽은 문서: ${esc(ai.src.join(', '))}</div>` : ''}
       <div class="hint">AI가 원문에서 뽑은 요약이라 틀릴 수 있습니다. 근거 쪽을 원문에서 꼭 확인하세요.</div></div>`;
   } else {
     const pf = (s.files || []).filter(f => f.kind === '지구단위계획');
