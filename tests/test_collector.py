@@ -311,3 +311,120 @@ def test_onbid_detail_url_new_format():
         "https://www.onbid.co.kr/op/cltrpbancinf/cltrdtl/CltrDtlController/mvmnCltrDtl.do"
         "?cltrScrnGrpCd=0001&cltrPrptDivCd=0005&onbidCltrno=2065354&onbidPbancNo=907822&pbctNo=10106135&pbctCdtnNo=6229934")
     assert onbid.detail_url({"onbidCltrno": 1}) == onbid.SEARCH_URL
+
+
+# ── LH 공고 요약 ──────────────────────────────────────────────
+import json  # noqa: E402
+import lhdetail  # noqa: E402
+
+FX = Path(__file__).parent / "fixtures"
+
+
+def test_lh_detail_page_busan():
+    s = lhdetail.summarize((FX / "lh_busan_b2.html").read_text(encoding="utf-8"))
+    assert s["plots_src"] == "상세페이지"
+    p = s["plots"][0]
+    assert p["addr"] == "부산광역시 강서구 강동동" and p["jibun"] == "302-0"
+    assert p["area"] == 19900 and p["price"] == 30745500000 and p["deposit"] == 1000000000
+    assert s["schedule"]["신청일시"].startswith("2026.10.15") and s["schedule"]["계약체결일정"] == "2026.10.26 ~ 2026.10.27"
+    kinds = {f["name"][:6]: f["kind"] for f in s["files"]}
+    assert kinds["부산강동공동"] == "공고문" and kinds["04.지구단"] == "지구단위계획" and kinds["01.용지공"] == "필지목록"
+    assert s["files"][0]["url"] == "https://apply.lh.or.kr/lhapply/lhFile.do?fileid=68652027"
+
+
+def test_lh_detail_page_asan_bid_schedule_and_sheet_fetch():
+    rows = json.loads((FX / "lh_sheets.json").read_text(encoding="utf-8"))["BN-0008032"]
+    s = lhdetail.summarize((FX / "lh_asan.html").read_text(encoding="utf-8"), fetch=lambda url: b"x")
+    assert s["schedule"]["개찰일시"] == "2026.10.28 16:30"
+    assert any(f["kind"] == "지구단위계획" and f["name"].endswith(".hwpx") for f in s["files"])
+    assert s["plots_src"] == "상세페이지" and s["err"]  # 가짜 바이트라 엑셀 읽기 실패 → 상세페이지 값 사용
+    assert len(s["plots"]) == 2 and s["plots"][1]["price"] == 29350000000
+    p = lhdetail.parse_parcel_rows(rows)
+    assert [x["block"] for x in p] == ["035-15", "준주거6"]
+    assert p[0]["area"] == 8867 and p[0]["jibun"] == "1748" and p[0]["bcr"] == "70%" and p[0]["far"] == "515%"
+    assert p[1]["far"] == "300%" and p[1]["use"] == "준주거용지"
+
+
+def test_lh_parcel_sheets_real_layouts():
+    S = json.loads((FX / "lh_sheets.json").read_text(encoding="utf-8"))
+    b = lhdetail.parse_parcel_rows(S["BN-0008004"])
+    assert len(b) == 1 and b[0]["block"] == "B-2" and b[0]["zone"] == "제2종일반주거지역"
+    assert b[0]["bcr"] == "60% 이하" and b[0]["far"] == "200% 이하" and "53.3m" in b[0]["floors"]
+    assert b[0]["use_from"] == "2026.02.28" and b[0]["area"] == 19900
+    h = lhdetail.parse_parcel_rows(S["BN-0008027"])  # 제목 3줄 병합 표
+    assert [x["block"] for x in h] == ["상업4-1", "상업4-2"] and h[0]["zone"] == "일반상업지역" and h[0]["area"] == 937.5
+    s = lhdetail.parse_parcel_rows(S["BN-0008048"])
+    assert s[0]["block"] == "근생9-2" and s[0]["jibun"] == "610-3" and s[0]["far"] == "300%" and s[0]["floors"] == "5층"
+    assert s[1]["district"] == "시흥은계"  # 병합 셀 채움
+    assert s[2]["floors"] == "" and s[2]["price"] == 3596805000 and s[2]["deposit"] == 359680500
+    w = lhdetail.parse_parcel_rows(S["BN-0008017"])
+    assert w[0]["jibun"] == "2745-2" and w[0]["floors"] == "4층 이하" and w[0]["price"] == 496440000 and w[1]["use"] == "근린생활시설"
+    n = lhdetail.parse_parcel_rows(S["BN-0008057"])
+    assert n[0]["block"] == "업무3" and n[0]["jibun"] == "303-101" and n[0]["use_from"] == "2029년 6월 이후"
+
+
+def test_lh_enrich_reuses_when_files_unchanged(monkeypatch):
+    html = (FX / "lh_busan_b2.html").read_text(encoding="utf-8")
+
+    class R:
+        text = html
+    calls = []
+    monkeypatch.setattr(lhdetail, "http_get", lambda url, **k: (calls.append(url), R())[1])
+    monkeypatch.setattr(lhdetail, "summarize", lambda h, fetch=None: {"sig": "new", "plots": []})
+    sig = ",".join(sorted(["68652027", "68652050", "68652051", "68652052", "68652054", "68652061", "68652070", "68652073"]))
+    items = [{"id": "lh:1", "src": "LH", "title": "t", "url": "u"}, {"id": "lh:2", "src": "LH", "title": "t", "url": "u2"}]
+    prev = {"lh:1": {"sum": {"sig": sig, "plots": [1]}, "ai": {"x": 1}}, "lh:2": {"sum": {"sig": "old", "plots": [2]}}}
+    st = lhdetail.enrich(items, prev, log=lambda *_: None)
+    assert items[0]["sum"]["plots"] == [1] and items[0]["ai"] == {"x": 1}  # 첨부 그대로 → 재사용
+    assert items[1]["sum"]["sig"] == "new"  # 첨부 바뀜(정정공고) → 다시 요약
+    assert "새로 요약 1건, 재사용 1건" in st["message"]
+
+
+def test_ai_summary_inert_without_key_and_parses_hwpx(monkeypatch):
+    import io
+    import zipfile
+    import ai_summary
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    items = [{"id": "lh:1", "src": "LH", "title": "t", "sum": {"sig": "s", "files": [{"kind": "지구단위계획"}]}}]
+    st = ai_summary.enrich(items, "2026-10-14 08:00")
+    assert st["ok"] and "미설정" in st["message"] and "ai" not in items[0]
+
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as z:
+        z.writestr("Contents/section0.xml", "<hp:p>구분 | 기정 | 변경</hp:p><hp:tr><hp:tc>B2</hp:tc><hp:tc>용적률 180% 이하</hp:tc>"
+                   "<hp:tc>용적률 200% 이하</hp:tc></hp:tr><hp:p>건폐율 60% 이하, 최고층수 25층</hp:p>")
+    files = {"u1": buf.getvalue()}
+    s = {"sig": "s", "plots": [{"block": "B2"}],
+         "files": [{"kind": "지구단위계획", "name": "결정조서.hwpx", "url": "u1"}, {"kind": "공고문", "name": "a.hwp", "url": "x"}]}
+    seen = {}
+
+    def caller(key, model, prompt):
+        seen["p"] = prompt
+        return ('결과: {"blocks":[{"block":"B2","far":"200% 이하","bcr":"60% 이하","floors":"25층","other":"주동 배치"}],'
+                '"common":["공공보행통로 설치"]}', {"input_tokens": 1000, "output_tokens": 100})
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test")
+    items = [{"id": "lh:1", "title": "부산", "sum": s}]
+    st = ai_summary.enrich(items, "2026-10-14 08:00", log=lambda *_: None, fetch=files.__getitem__, caller=caller)
+    assert "B2" in seen["p"] and "200% 이하" in seen["p"] and "변경" in seen["p"]
+    ai = items[0]["ai"]
+    assert ai["blocks"][0]["far"] == "200% 이하" and ai["blocks"][0]["other"] == ["주동 배치"] and ai["sig"] == "s"
+    assert ai["common"] == ["공공보행통로 설치"] and "새로 요약 1건" in st["message"]
+    # 첨부 그대로면 다시 부르지 않는다
+    seen.clear()
+    ai_summary.enrich(items, "x", log=lambda *_: None, fetch=files.__getitem__, caller=caller)
+    assert not seen
+
+
+def test_lh_summary_fills_price_from_page_when_sheet_lacks_it():
+    S = json.loads((FX / "lh_sheets.json").read_text(encoding="utf-8"))
+    html = (FX / "lh_busan_b2.html").read_text(encoding="utf-8")
+    s = lhdetail.summarize(html, fetch=lambda url: b"x")
+    assert s["plots_src"] in ("상세페이지", "")  # 가짜 엑셀은 읽기 실패 → 상세페이지로
+    orig = lhdetail.read_sheet
+    try:
+        lhdetail.read_sheet = lambda data, name: S["BN-0008004"]
+        s = lhdetail.summarize(html, fetch=lambda url: b"x")
+    finally:
+        lhdetail.read_sheet = orig
+    p = s["plots"][0]
+    assert s["plots_src"] == "필지목록" and p["far"] == "200% 이하" and p["price"] == 30745500000 and p["deposit"] == 1000000000
