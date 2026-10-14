@@ -155,20 +155,76 @@ def _zip_name(info: zipfile.ZipInfo) -> str:
     return n
 
 
+# HWP 5.0(바이너리) 문단 글자 안의 제어문자: 이 코드들은 뒤에 7글자(총 8 WCHAR)를 더 차지한다
+_HWP_EXT_CTRL = {1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 12, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23}
+
+
+def _hwp_pages(data: bytes) -> list[str]:
+    """한글 .hwp(HWP 5.0) 본문 글자 추출. 쪽 정보가 없어 2,500자씩 잘라 '쪽'으로 쓴다."""
+    import struct
+    import zlib
+
+    import olefile
+    ole = olefile.OleFileIO(io.BytesIO(data))
+    header = ole.openstream("FileHeader").read()
+    flags = struct.unpack_from("<I", header, 36)[0]
+    if flags & 0x2:
+        raise ValueError("암호가 걸린 HWP")
+    compressed = bool(flags & 0x1)
+    sections = sorted((e for e in ole.listdir() if len(e) == 2 and e[0] == "BodyText" and e[1].startswith("Section")),
+                      key=lambda e: int(e[1][7:] or 0))
+    paras = []
+    for sec in sections:
+        raw = ole.openstream(sec).read()
+        if compressed:
+            raw = zlib.decompress(raw, -15)
+        i = 0
+        while i + 4 <= len(raw):
+            h = struct.unpack_from("<I", raw, i)[0]
+            tag, size = h & 0x3FF, (h >> 20) & 0xFFF
+            i += 4
+            if size == 0xFFF:
+                size = struct.unpack_from("<I", raw, i)[0]
+                i += 4
+            if tag == 67:  # HWPTAG_PARA_TEXT
+                body = raw[i:i + size]
+                chars, j = [], 0
+                while j + 2 <= len(body):
+                    c = struct.unpack_from("<H", body, j)[0]
+                    if c in _HWP_EXT_CTRL:
+                        j += 16
+                        if c == 9:
+                            chars.append("\t")
+                        continue
+                    j += 2
+                    if c in (10, 13):
+                        chars.append("\n")
+                    elif c >= 32:
+                        chars.append(chr(c))
+                t = "".join(chars).strip()
+                if t:
+                    paras.append(t)
+            i += size
+    text = "\n".join(paras)
+    return [text[k:k + 2500] for k in range(0, len(text), 2500)]
+
+
 def pages_of(name: str, data: bytes, depth: int = 0) -> list[str]:
-    """PDF·HWPX 는 쪽별 본문, ZIP 은 안의 PDF·HWPX 를 모두 읽는다. 읽을 수 없는 파일은 빈 목록."""
+    """PDF·HWPX·HWP 는 쪽별 본문, ZIP 은 안의 문서를 모두 읽는다. 읽을 수 없는 파일은 빈 목록."""
     low = name.lower()
     try:
         if low.endswith(".pdf"):
             return _pdf_pages(data)
         if low.endswith(".hwpx"):
             return _hwpx_pages(data)
+        if low.endswith(".hwp"):
+            return _hwp_pages(data)
         if low.endswith(".zip") and depth == 0:
             out = []
             with zipfile.ZipFile(io.BytesIO(data)) as z:
                 for info in z.infolist():
                     inner = _zip_name(info)
-                    if inner.lower().endswith((".pdf", ".hwpx")) and info.file_size < 60_000_000:
+                    if inner.lower().endswith((".pdf", ".hwpx", ".hwp")) and info.file_size < 60_000_000:
                         out += [f"〔{inner.rsplit('/', 1)[-1]}〕\n{t}" for t in pages_of(inner, z.read(info), 1)]
             return out
     except Exception:  # noqa: BLE001  손상·암호 걸린 파일 등은 건너뛴다
@@ -219,7 +275,7 @@ def build_body(summary: dict, fetch, targets: list[str] | None = None) -> tuple[
     files = summary.get("files") or []
     targets = targets if targets is not None else targets_of(summary)
     parts, used = [], []
-    plan = [f for f in files if f["kind"] == "지구단위계획" and f["name"].lower().endswith((".pdf", ".hwpx", ".zip"))]
+    plan = [f for f in files if f["kind"] == "지구단위계획" and f["name"].lower().endswith((".pdf", ".hwpx", ".hwp", ".zip"))]
     notice = [f for f in files if f["kind"] == "공고문" and f["name"].lower().endswith(".pdf")][:1]
     budget_plan = MAX_CHARS - (NOTICE_CHARS if notice else 0)
     readable = [(f, pages_of(f["name"], fetch(f["url"]))) for f in plan[:3]]
@@ -296,7 +352,7 @@ def enrich(items: list[dict], stamp: str, log=print, fetch=_get, caller=call_cla
         same = ai.get("sig") == s.get("sig")
         sample = "시연" in (ai.get("model") or "")   # 수동 견본은 실제 결과로 교체
         plan_names = {f["name"] for f in s["files"] if f["kind"] == "지구단위계획"}
-        missed_plan = bool(ai.get("blocks") and plan_names and not plan_names & set(ai.get("src") or []) and not ai.get("retried"))
+        missed_plan = bool(ai.get("blocks") and plan_names and not plan_names & set(ai.get("src") or []) and ai.get("plan_retry", 0) < 2)
         if same and not sample and not missed_plan and (ai.get("blocks") or ai.get("none") or ai.get("fail", 0) >= 2):
             continue
         reason = why_not(r, today)
@@ -327,8 +383,8 @@ def enrich(items: list[dict], stamp: str, log=print, fetch=_get, caller=call_cla
                                                 "in": tin, "out": tout, "usd": round(cost, 4)})
             res = parse_json(text)
             r["ai"] = {"sig": s.get("sig"), "model": model, "at": stamp, "src": used, **res}
-            if missed_plan:
-                r["ai"]["retried"] = True
+            if missed_plan:  # 지구단위계획을 못 읽고 요약했던 공고 → 재시도 횟수 기록 (최대 2회)
+                r["ai"]["plan_retry"] = ai.get("plan_retry", 0) + 1
             done += 1
         except Exception as e:  # noqa: BLE001
             failed += 1
