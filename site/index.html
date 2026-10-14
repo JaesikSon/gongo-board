@@ -45,7 +45,7 @@ h1{font-size:24px;margin:0 0 4px;letter-spacing:-.02em}
 .area select{width:auto;padding:9px 6px}
 .count{margin:14px 2px 8px;color:var(--muted);font-size:14px;display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap}
 .list{display:flex;flex-direction:column;gap:8px}
-.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px 16px;display:grid;grid-template-columns:1fr auto;gap:6px 18px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px 16px;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px 18px}
 .card:hover{border-color:var(--muted)}
 .t{font-weight:500;font-size:15.5px;text-decoration:none;line-height:1.4}
 .t:hover{text-decoration:underline}
@@ -75,11 +75,34 @@ details.status summary{cursor:pointer;font-weight:500}
 .st{display:grid;grid-template-columns:18px 190px 1fr;gap:6px;font-size:13.5px;padding:6px 0;border-top:1px solid var(--line)}
 .st:first-of-type{border-top:0}
 .ok{color:var(--accent)} .bad{color:var(--warn)}
+details.sum{grid-column:1/-1;min-width:0;border-top:1px dashed var(--line);margin-top:4px;padding-top:6px}
+details.sum>summary{cursor:pointer;color:var(--accent);font-weight:500;font-size:14px;list-style:none;display:flex;gap:10px;flex-wrap:wrap;align-items:baseline}
+details.sum>summary::-webkit-details-marker{display:none}
+details.sum>summary::before{content:'▸';display:inline-block;transition:transform .15s}
+details.sum[open]>summary::before{transform:rotate(90deg)}
+details.sum>summary .kp{color:var(--muted);font-weight:400;font-size:13px}
+.sb{margin-top:10px}
+.sb h4{margin:0 0 6px;font-size:13.5px;font-weight:700}
+.tw{overflow-x:auto;border:1px solid var(--line);border-radius:8px}
+table.pt{border-collapse:collapse;width:100%;font-size:13px;font-variant-numeric:tabular-nums}
+table.pt th,table.pt td{padding:6px 8px;border-bottom:1px solid var(--line);text-align:left;white-space:nowrap;vertical-align:top}
+table.pt th{background:var(--chip);font-weight:500;color:var(--muted)}
+table.pt tr:last-child td{border-bottom:0}
+table.pt td.wrap{white-space:normal;min-width:160px}
+table.pt td.num{text-align:right}
+.sched{display:grid;grid-template-columns:max-content 1fr;gap:3px 14px;font-size:13px}
+.sched span:nth-child(odd){color:var(--muted)}
+.files{display:flex;gap:6px;flex-wrap:wrap}
+.files a{max-width:100%;overflow-wrap:anywhere;font-size:12.5px;border:1px solid var(--line);border-radius:6px;padding:2px 8px;text-decoration:none;background:var(--bg)}
+.files a:hover{border-color:var(--accent);color:var(--accent)}
+.files a b{font-weight:500;color:var(--accent);margin-right:4px}
+.ai ul{margin:4px 0 0;padding-left:18px;font-size:13px}
+.hint{font-size:12.5px;color:var(--muted);margin-top:6px}
 footer{color:var(--muted);font-size:12.5px;margin-top:18px;line-height:1.6}
 @media (max-width:760px){
   header{padding:20px 16px 8px}.wrap{padding:0 16px 50px}
   .filters{grid-template-columns:1fr 1fr}.filters .q{grid-column:1/-1}
-  .card{grid-template-columns:1fr}.right{text-align:left;display:flex;gap:12px;align-items:baseline;flex-wrap:wrap}
+  .card{grid-template-columns:minmax(0,1fr)}.right{text-align:left;display:flex;gap:12px;align-items:baseline;flex-wrap:wrap}
   .st{grid-template-columns:18px 1fr}.st .m{grid-column:2}
 }
 </style>
@@ -143,6 +166,7 @@ footer{color:var(--muted);font-size:12.5px;margin-top:18px;line-height:1.6}
     대상: 공동주택·주상복합/복합·준주거·상업/업무 용지 (온비드는 공공기관 매각 토지 중 해당 용지이거나 3,000㎡ 이상).
     출처: 온비드 OpenAPI(물건목록·입찰결과, 한국자산관리공사), LH 분양임대공고 OpenAPI, 각 기관 홈페이지 게시판.
     낙찰가는 온비드 물건만 제공되며, LH·도시공사 자체 공고는 기관이 게시한 결과공고 링크로 확인할 수 있습니다.
+    LH 공고의 '요약 보기'는 상세페이지·첨부 필지목록에서 자동 추출하며, 지구단위계획 요약은 AI가 원문을 읽어 정리한 것입니다.
     공고 내용은 요약 정보이며, 입찰 전 반드시 원문 공고를 확인하세요.
   </footer>
 </div>
@@ -169,7 +193,7 @@ function dday(end){
 const isNew = r => DATA.updated && r.first_seen === DATA.updated && DATA.new_count > 0;
 const resStat = r => (r.res && r.res.stat) || 'none';
 const closedOn = r => ((r.res && r.res.opbd) || r.end || r.closed || r.posted || '').slice(0,10);
-const price = r => isArch() && r.res && r.res.amt != null ? r.res.amt : r.minp;
+const price = r => isArch() && r.res && r.res.amt != null ? r.res.amt : (r.minp ?? r.supply);
 const zoneOf = r => r.zone || '용도지역 미확인';
 const jimok = r => r.kind === '물건' ? ((r.usage || '').split(' > ')[1] || '') : '';
 const source = () => isArch() ? (ARCH ? ARCH.items : []) : DATA.items;
@@ -213,8 +237,8 @@ function filtered(){
   const by = {
     end: (a,b) => (a.end||'9999').localeCompare(b.end||'9999'),
     new: (a,b) => (b.first_seen||'').localeCompare(a.first_seen||'') || (b.posted||b.bgn||'').localeCompare(a.posted||a.bgn||''),
-    low: (a,b) => (a.minp ?? 1e18) - (b.minp ?? 1e18),
-    high: (a,b) => (b.minp ?? -1) - (a.minp ?? -1),
+    low: (a,b) => (price(a) ?? 1e18) - (price(b) ?? 1e18),
+    high: (a,b) => (price(b) ?? -1) - (price(a) ?? -1),
     ratio: (a,b) => (a.ratio ?? 999) - (b.ratio ?? 999),
     recent: (a,b) => closedOn(b).localeCompare(closedOn(a)),
     whigh: (a,b) => (A(b) ?? -1) - (A(a) ?? -1),
@@ -246,12 +270,67 @@ function chipsOf(r, arch){
   ].join('');
 }
 
+const PY = 0.3025;
+const fmtA = a => a ? `${Math.round(a).toLocaleString()}㎡<br><span class="small">${Math.round(a*PY).toLocaleString()}평</span>` : '';
+function sumKey(r){
+  const s = r.sum, ps = s.plots || [];
+  const fars = [...new Set(ps.map(p => p.far).filter(Boolean))];
+  const ai = r.ai && r.ai.blocks || [];
+  const far = fars.length ? fars : [...new Set(ai.map(b => b.far).filter(Boolean))];
+  const fl = [...new Set([...ps.map(p => p.floors), ...ai.map(b => b.floors || b.height)].filter(Boolean))];
+  return [ps.length ? `${ps.length}필지` : '',
+    r.area ? `${Math.round(r.area).toLocaleString()}㎡ (${Math.round(r.area*PY).toLocaleString()}평)` : '',
+    r.supply ? `공급가 ${won(r.supply)}` : '',
+    far.length ? `용적률 ${far.slice(0,2).join('·')}${far.length>2?'…':''}` : '',
+    fl.length ? `${fl[0]}${fl.length>1?' 외':''}` : ''].filter(Boolean).map(x => `<span class="kp">${esc(x)}</span>`).join('');
+}
+function sumPanel(r){
+  const s = r.sum, ps = s.plots || [];
+  const cols = [
+    ['블록', p => esc(p.block || '')], ['용지·용도', p => esc([p.use, p.jimok && p.jimok !== p.use ? p.jimok : ''].filter(Boolean).join(' / '))],
+    ['소재지·지번', p => esc([p.district, p.addr, p.jibun].filter(Boolean).join(' ')), 'wrap'], ['용도지역', p => esc(p.zone || '')],
+    ['면적', p => fmtA(p.area), 'num'],
+    ['공급가격', p => p.price ? `${won(p.price)}${p.area ? `<br><span class="small">평당 ${won(Math.round(p.price/(p.area*PY)))}</span>` : ''}` : '', 'num'],
+    ['예약금·보증금', p => p.deposit ? won(p.deposit) : '', 'num'],
+    ['건폐율', p => esc(p.bcr || '')], ['용적률', p => esc(p.far || '')], ['층수·높이', p => esc(p.floors || ''), 'wrap'],
+    ['세대수', p => p.units ? esc(String(p.units)) : ''], ['토지사용', p => esc(p.use_from || '')], ['공급방법', p => esc(p.method || '')],
+  ].filter(([, f]) => ps.some(p => f(p)));
+  const table = ps.length ? `<div class="sb"><h4>공급 필지 <span class="small">(${s.plots_src === '필지목록' ? '첨부 필지목록 엑셀' : 'LH 상세페이지'} 기준)</span></h4><div class="tw"><table class="pt">
+    <tr>${cols.map(c => `<th>${c[0]}</th>`).join('')}</tr>
+    ${ps.slice(0, 80).map(p => `<tr>${cols.map(c => `<td class="${c[2]||''}">${c[1](p)}</td>`).join('')}</tr>`).join('')}</table></div>
+    ${ps.length > 80 ? `<div class="hint">외 ${ps.length - 80}필지는 원문 필지목록을 확인하세요.</div>` : ''}</div>` : '';
+  const sc = Object.entries(s.schedule || {});
+  const sched = sc.length ? `<div class="sb"><h4>공급 일정</h4><div class="sched">${sc.map(([k,v]) => `<span>${esc(k)}</span><span>${esc(v)}</span>`).join('')}</div></div>` : '';
+  const ai = r.ai || {};
+  let plan;
+  if (ai.blocks && ai.blocks.length) {
+    const ac = [['블록', b => esc(b.block)], ['용도', b => esc(b.use)], ['허용용도', b => esc(b.allowed), 'wrap'], ['불허용도', b => esc(b.banned), 'wrap'],
+      ['건폐율', b => esc(b.bcr)], ['용적률', b => esc(b.far)], ['최고층수', b => esc(b.floors)], ['최고높이', b => esc(b.height), 'wrap'],
+      ['세대·규모', b => esc(b.units), 'wrap'], ['기타 주요 규제', b => (b.other||[]).map(esc).join('<br>'), 'wrap'], ['근거', b => esc(b.pages)]]
+      .filter(([, f]) => ai.blocks.some(b => f(b)));
+    plan = `<div class="sb ai"><h4>지구단위계획 인허가 제한 <span class="small">(AI 요약 · ${esc((ai.src||[]).join(', '))})</span></h4>
+      <div class="tw"><table class="pt"><tr>${ac.map(c => `<th>${c[0]}</th>`).join('')}</tr>
+      ${ai.blocks.map(b => `<tr>${ac.map(c => `<td class="${c[2]||''}">${c[1](b)}</td>`).join('')}</tr>`).join('')}</table></div>
+      ${(ai.common||[]).length ? `<ul>${ai.common.map(x => `<li>${esc(x)}</li>`).join('')}</ul>` : ''}
+      <div class="hint">AI가 원문에서 뽑은 요약이라 틀릴 수 있습니다. 근거 쪽을 원문에서 꼭 확인하세요.</div></div>`;
+  } else {
+    const pf = (s.files || []).filter(f => f.kind === '지구단위계획');
+    plan = `<div class="sb"><h4>지구단위계획</h4><div class="hint">${pf.length
+      ? '층수·높이·허용용도 등 세부 제한은 아래 지구단위계획 원문에서 확인하세요.' + (ai.none ? '' : ' (AI 요약 기능을 켜면 블록별로 정리해 드립니다)')
+      : '이 공고에는 지구단위계획 문서가 첨부되어 있지 않습니다. 공고문을 확인하세요.'}</div></div>`;
+  }
+  const files = (s.files || []).length ? `<div class="sb"><h4>원문 첨부</h4><div class="files">${s.files.map(f =>
+    `<a href="${esc(f.url)}" target="_blank" rel="noopener"><b>${esc(f.kind)}</b>${esc(f.name.length > 46 ? f.name.slice(0,44)+'…' : f.name)}</a>`).join('')}</div></div>` : '';
+  return `<details class="sum"><summary>요약 보기 ${sumKey(r)}</summary>${table}${sched}${plan}${files}
+    <div class="hint">LH 상세페이지·첨부 필지목록에서 자동 추출했습니다. 입찰·청약 전 반드시 원문 공고를 확인하세요.</div></details>`;
+}
+
 function card(r){
   const arch = isArch();
   const meta = [
     r.org && r.org !== r.src ? esc(r.org) : esc(r.src),
     r.kind === '물건' && r.addr && r.addr !== r.title ? esc(r.addr) : '',
-    r.area ? `${r.area.toLocaleString()}㎡ (${Math.round(r.area*0.3025).toLocaleString()}평)` : '',
+    r.area && !r.sum ? `${r.area.toLocaleString()}㎡ (${Math.round(r.area*0.3025).toLocaleString()}평)` : '',
     arch ? (closedOn(r) ? `${r.res && r.res.opbd ? '개찰' : r.kind === '결과공고' ? '게시' : '종료'} ${esc(closedOn(r))}` : '')
          : r.bgn ? `입찰 ${esc(r.bgn.slice(5))} ~ ${esc((r.end||'').slice(5))}` : (r.posted ? `게시 ${esc(r.posted)}` : ''),
   ].filter(Boolean).map(x => `<span>${x}</span>`).join('');
@@ -270,13 +349,15 @@ function card(r){
   } else {
     const dd = dday(r.end), hot = dd !== null && dd <= 3;
     const dtxt = dd === null ? (r.kind === '물건' && !r.pvct ? '일정 미정' : '') : dd < 0 ? '' : dd === 0 ? '오늘 마감' : `D-${dd}`;
-    right = (r.minp ? `<div class="money">${won(r.minp)}</div><div class="small">감정가 ${won(r.apsl)}${r.ratio ? ` · ${r.ratio}%` : ''}</div>` : '')
+    right = (r.minp ? `<div class="money">${won(r.minp)}</div><div class="small">감정가 ${won(r.apsl)}${r.ratio ? ` · ${r.ratio}%` : ''}</div>`
+           : r.supply ? `<div class="money">${won(r.supply)}</div><div class="small">공급가격${(r.sum.plots||[]).length > 1 ? ' 합계' : ''}</div>` : '')
           + (dtxt ? `<div class="small dday${hot?' hot':''}">${dtxt}${r.end && r.end.length>10 ? ' '+esc(r.end.slice(11)) : ''}</div>` : '');
   }
   return `<article class="card">
     <div><a class="t" href="${esc(r.url)}" target="_blank" rel="noopener">${esc(r.title)}</a>
       <div class="meta">${meta}</div><div class="chips">${chipsOf(r, arch)}</div></div>
     <div class="right">${right}</div>
+    ${r.sum ? sumPanel(r) : ''}
   </article>`;
 }
 
