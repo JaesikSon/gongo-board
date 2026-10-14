@@ -144,12 +144,35 @@ def _hwpx_pages(data: bytes) -> list[str]:
     return out
 
 
-def pages_of(name: str, data: bytes) -> list[str]:
+def _zip_name(info: zipfile.ZipInfo) -> str:
+    """한글 파일명이 cp949 로 들어 있는 zip 이 많다."""
+    n = info.filename
+    if not info.flag_bits & 0x800:
+        try:
+            n = n.encode("cp437").decode("cp949")
+        except (UnicodeEncodeError, UnicodeDecodeError):
+            pass
+    return n
+
+
+def pages_of(name: str, data: bytes, depth: int = 0) -> list[str]:
+    """PDF·HWPX 는 쪽별 본문, ZIP 은 안의 PDF·HWPX 를 모두 읽는다. 읽을 수 없는 파일은 빈 목록."""
     low = name.lower()
-    if low.endswith(".pdf"):
-        return _pdf_pages(data)
-    if low.endswith(".hwpx"):
-        return _hwpx_pages(data)
+    try:
+        if low.endswith(".pdf"):
+            return _pdf_pages(data)
+        if low.endswith(".hwpx"):
+            return _hwpx_pages(data)
+        if low.endswith(".zip") and depth == 0:
+            out = []
+            with zipfile.ZipFile(io.BytesIO(data)) as z:
+                for info in z.infolist():
+                    inner = _zip_name(info)
+                    if inner.lower().endswith((".pdf", ".hwpx")) and info.file_size < 60_000_000:
+                        out += [f"〔{inner.rsplit('/', 1)[-1]}〕\n{t}" for t in pages_of(inner, z.read(info), 1)]
+            return out
+    except Exception:  # noqa: BLE001  손상·암호 걸린 파일 등은 건너뛴다
+        return []
     return []
 
 
@@ -196,12 +219,13 @@ def build_body(summary: dict, fetch, targets: list[str] | None = None) -> tuple[
     files = summary.get("files") or []
     targets = targets if targets is not None else targets_of(summary)
     parts, used = [], []
-    plan = [f for f in files if f["kind"] == "지구단위계획" and f["name"].lower().endswith((".pdf", ".hwpx"))]
+    plan = [f for f in files if f["kind"] == "지구단위계획" and f["name"].lower().endswith((".pdf", ".hwpx", ".zip"))]
     notice = [f for f in files if f["kind"] == "공고문" and f["name"].lower().endswith(".pdf")][:1]
     budget_plan = MAX_CHARS - (NOTICE_CHARS if notice else 0)
-    for f in plan[:2]:
-        pages = pages_of(f["name"], fetch(f["url"]))
-        txt = select_pages(pages, targets, budget_plan // max(1, len(plan[:2])))
+    readable = [(f, pages_of(f["name"], fetch(f["url"]))) for f in plan[:3]]
+    readable = [(f, pg) for f, pg in readable if pg][:2]   # 읽을 수 있는 지구단위계획 문서 최대 2개
+    for f, pages in readable:
+        txt = select_pages(pages, targets, budget_plan // max(1, len(readable)))
         if txt:
             parts.append(f"=== 문서: {f['name']} ===\n{txt}")
             used.append(f["name"])
@@ -271,7 +295,9 @@ def enrich(items: list[dict], stamp: str, log=print, fetch=_get, caller=call_cla
         ai = r.get("ai") or {}
         same = ai.get("sig") == s.get("sig")
         sample = "시연" in (ai.get("model") or "")   # 수동 견본은 실제 결과로 교체
-        if same and not sample and (ai.get("blocks") or ai.get("none") or ai.get("fail", 0) >= 2):
+        plan_names = {f["name"] for f in s["files"] if f["kind"] == "지구단위계획"}
+        missed_plan = bool(ai.get("blocks") and plan_names and not plan_names & set(ai.get("src") or []) and not ai.get("retried"))
+        if same and not sample and not missed_plan and (ai.get("blocks") or ai.get("none") or ai.get("fail", 0) >= 2):
             continue
         reason = why_not(r, today)
         if reason:
@@ -301,6 +327,8 @@ def enrich(items: list[dict], stamp: str, log=print, fetch=_get, caller=call_cla
                                                 "in": tin, "out": tout, "usd": round(cost, 4)})
             res = parse_json(text)
             r["ai"] = {"sig": s.get("sig"), "model": model, "at": stamp, "src": used, **res}
+            if missed_plan:
+                r["ai"]["retried"] = True
             done += 1
         except Exception as e:  # noqa: BLE001
             failed += 1
