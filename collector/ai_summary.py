@@ -11,6 +11,7 @@ import io
 import json
 import re
 import zipfile
+from pathlib import Path
 
 from common import env, http_get
 
@@ -41,6 +42,78 @@ JSON 하나만 출력하라 (설명·코드블록 없이):
 본문:
 {body}
 """
+
+
+# ── 요약 대상 조건 (사용자 지정) ───────────────────────────────────────
+PYEONG = 3.305785
+MIN_PYEONG = float(env("AI_MIN_PYEONG", "1500"))          # 1) 토지면적 1,500평 이상
+HOUSING_RX = re.compile(r"공동\s*주택|아파트|주상\s*복합|복합\s*용지|준\s*주거|주택\s*용지|주거\s*용지|도시형")  # 2) 주택건설 가능 용지
+NON_HOUSING_RX = re.compile(r"단독|근린|상업|업무|산업|유통|주차|종교|의료|교육|공공|자족|연구|물류|판매")
+HOUSING_CATS = ("공동주택", "주상복합·복합")
+DATE_RX = re.compile(r"(20\d\d)[.\-/]\s*(\d{1,2})[.\-/]\s*(\d{1,2})")
+DEADLINE_LABEL_RX = re.compile(r"신청|접수|입찰|개찰|추첨|마감")
+
+
+def is_housing(use: str) -> bool:
+    u = use or ""
+    if re.search(r"주상\s*복합", u):
+        return True
+    return bool(HOUSING_RX.search(u)) and not NON_HOUSING_RX.search(u)
+
+
+def eligible_plots(r: dict) -> list[dict]:
+    """조건 1·2를 만족하는 필지. 필지 정보가 없으면 공고 단위(용지유형·합계면적)로 판단."""
+    plots = (r.get("sum") or {}).get("plots") or []
+    min_m2 = MIN_PYEONG * PYEONG
+    if plots:
+        return [p for p in plots if (p.get("area") or 0) >= min_m2
+                and (is_housing(p.get("use", "")) or (not p.get("use") and r.get("cat") in HOUSING_CATS))]
+    if r.get("cat") in HOUSING_CATS and (r.get("area") or 0) >= min_m2:
+        return [{"block": "", "area": r.get("area")}]
+    return []
+
+
+def deadline(r: dict) -> str:
+    """신청·입찰 관련 일정 중 가장 늦은 날짜 (없으면 공고 마감일)."""
+    days = []
+    for k, v in ((r.get("sum") or {}).get("schedule") or {}).items():
+        if DEADLINE_LABEL_RX.search(k) and "계약" not in k:
+            days += [f"{y}-{int(m):02d}-{int(d):02d}" for y, m, d in DATE_RX.findall(v)]
+    return max(days) if days else (r.get("end") or "")[:10]
+
+
+def why_not(r: dict, today: str) -> str:
+    """요약 대상이 아니면 이유, 대상이면 ''."""
+    dl = deadline(r)
+    if dl and dl < today:
+        return "마감"
+    if not eligible_plots(r):
+        return "조건 미달(1,500평 이상 주택건설 용지 없음)"
+    return ""
+
+
+# ── 월 사용액 상한 ────────────────────────────────────────────────────
+USAGE = Path(__file__).resolve().parent.parent / "site" / "data" / "ai_usage.json"
+PRICE_IN = float(env("AI_PRICE_IN", "2"))     # USD / 100만 토큰 (claude-sonnet-5-5)
+PRICE_OUT = float(env("AI_PRICE_OUT", "10"))
+BUDGET = float(env("AI_BUDGET_USD", "18"))    # 콘솔 월 한도($20)보다 조금 낮게 — 여기서 먼저 멈춘다
+EST_CALL = 0.20                               # 1건 최대 예상비용 (여유 있게)
+
+
+def load_usage(month: str) -> dict:
+    try:
+        u = json.loads(USAGE.read_text(encoding="utf-8"))
+    except Exception:  # noqa: BLE001
+        u = {}
+    if u.get("month") != month:
+        u = {"month": month, "usd": 0.0, "calls": 0, "in": 0, "out": 0, "log": []}
+    return u
+
+
+def save_usage(u: dict) -> None:
+    USAGE.parent.mkdir(parents=True, exist_ok=True)
+    u["log"] = u.get("log", [])[-200:]
+    USAGE.write_text(json.dumps(u, ensure_ascii=False, indent=1), encoding="utf-8")
 
 
 def _pdf_pages(data: bytes) -> list[str]:
@@ -109,9 +182,9 @@ def select_pages(pages: list[str], targets: list[str], budget: int) -> str:
     return "\n\n".join(f"[p.{i + 1}]\n{s}" for i, s in chosen)
 
 
-def targets_of(summary: dict) -> list[str]:
+def targets_of(summary: dict, plots: list[dict] | None = None) -> list[str]:
     out = []
-    for p in summary.get("plots") or []:
+    for p in (plots if plots is not None else summary.get("plots") or []):
         b = (p.get("block") or "").strip()
         lab = b or (p.get("jibun") or "")
         if lab and lab not in out:
@@ -119,9 +192,9 @@ def targets_of(summary: dict) -> list[str]:
     return out[:30]
 
 
-def build_body(summary: dict, fetch) -> tuple[str, list[str]]:
+def build_body(summary: dict, fetch, targets: list[str] | None = None) -> tuple[str, list[str]]:
     files = summary.get("files") or []
-    targets = targets_of(summary)
+    targets = targets if targets is not None else targets_of(summary)
     parts, used = [], []
     plan = [f for f in files if f["kind"] == "지구단위계획" and f["name"].lower().endswith((".pdf", ".hwpx"))]
     notice = [f for f in files if f["kind"] == "공고문" and f["name"].lower().endswith(".pdf")][:1]
@@ -179,14 +252,17 @@ def _get(url: str) -> bytes:
 
 
 def enrich(items: list[dict], stamp: str, log=print, fetch=_get, caller=call_claude) -> dict:
+    """조건(1,500평 이상 · 주택건설 가능 용지 · 마감 전)을 만족하는 공고만 요약. 월 사용액 상한에서 멈춘다."""
     name = "지구단위계획 AI 요약"
     key = env("ANTHROPIC_API_KEY")
     if not key:
         return {"name": name, "ok": True, "count": 0, "message": "ANTHROPIC_API_KEY 미설정 — 건너뜀 (원문 링크만 제공)"}
     model = env("AI_MODEL", "claude-sonnet-5-5")
     limit = int(env("AI_MAX_PER_RUN", "6"))
-    done = skipped = failed = 0
-    tin = tout = 0
+    today = stamp[:10]
+    usage = load_usage(stamp[:7])
+    done = skipped = failed = out_of_scope = 0
+    budget_hit = False
     errs = []
     for r in items:
         s = r.get("sum")
@@ -194,22 +270,36 @@ def enrich(items: list[dict], stamp: str, log=print, fetch=_get, caller=call_cla
             continue
         ai = r.get("ai") or {}
         same = ai.get("sig") == s.get("sig")
-        if same and (ai.get("blocks") or ai.get("none") or ai.get("fail", 0) >= 2):  # 형식 오류 2회면 첨부 바뀔 때까지 중단
+        sample = "시연" in (ai.get("model") or "")   # 수동 견본은 실제 결과로 교체
+        if same and not sample and (ai.get("blocks") or ai.get("none") or ai.get("fail", 0) >= 2):
+            continue
+        reason = why_not(r, today)
+        if reason:
+            out_of_scope += 1
             continue
         if done + failed >= limit:
             skipped += 1
             continue
+        if usage["usd"] + EST_CALL > BUDGET:
+            budget_hit = True
+            skipped += 1
+            continue
         try:
-            body, used = build_body(s, fetch)
+            plots = eligible_plots(r)
+            targets = targets_of(s, plots)
+            body, used = build_body(s, fetch, targets)
             if not body:
                 r["ai"] = {"sig": s.get("sig"), "none": "지구단위계획 PDF/HWPX 첨부 없음", "at": stamp}
                 continue
-            prompt = PROMPT.format(targets=", ".join(targets_of(s)) or "(목록 없음 — 문서에서 공급 대상 용지를 찾아 정리)",
-                                   body=body)
-            text, usage = caller(key, model, prompt)
+            prompt = PROMPT.format(targets=", ".join(targets) or "(목록 없음 — 문서에서 공급 대상 용지를 찾아 정리)", body=body)
+            text, u = caller(key, model, prompt)
+            tin, tout = u.get("input_tokens", 0), u.get("output_tokens", 0)
+            cost = tin / 1e6 * PRICE_IN + tout / 1e6 * PRICE_OUT
+            usage.update(usd=round(usage["usd"] + cost, 4), calls=usage["calls"] + 1,
+                         **{"in": usage["in"] + tin, "out": usage["out"] + tout})
+            usage.setdefault("log", []).append({"at": stamp, "id": r.get("id"), "title": (r.get("title") or "")[:40],
+                                                "in": tin, "out": tout, "usd": round(cost, 4)})
             res = parse_json(text)
-            tin += usage.get("input_tokens", 0)
-            tout += usage.get("output_tokens", 0)
             r["ai"] = {"sig": s.get("sig"), "model": model, "at": stamp, "src": used, **res}
             done += 1
         except Exception as e:  # noqa: BLE001
@@ -218,12 +308,14 @@ def enrich(items: list[dict], stamp: str, log=print, fetch=_get, caller=call_cla
                 r["ai"] = {"sig": s.get("sig"), "fail": (ai.get("fail", 0) if same else 0) + 1, "at": stamp}
             errs.append(f"{r.get('title', '')[:20]}: {str(e)[:120]}")
             log(f"  AI 요약 실패 {r.get('title', '')[:30]}: {e}")
-    msg = f"새로 요약 {done}건"
+    save_usage(usage)
+    msg = f"새로 요약 {done}건 · 조건 밖 {out_of_scope}건"
     if skipped:
         msg += f", 다음 회차로 미룸 {skipped}건"
+    if budget_hit:
+        msg += f" (이번 달 상한 ${BUDGET:g} 도달)"
     if failed:
         msg += f", 실패 {failed}건 ({errs[0]})"
-    if tin:
-        msg += f" · 토큰 입력 {tin:,} / 출력 {tout:,}"
+    msg += f" · 이번 달 사용 ${usage['usd']:.2f} / ${BUDGET:g} ({usage['calls']}회)"
     log(f"  {msg}")
     return {"name": name, "ok": failed == 0 or done > 0, "count": done, "message": msg}
