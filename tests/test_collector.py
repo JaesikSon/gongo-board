@@ -490,7 +490,7 @@ def test_ai_summary_reads_zip_and_skips_broken_file(monkeypatch, tmp_path):
     # 예전에 지구단위계획 없이(공고문만으로) 요약된 기록 → 한 번 다시 요약
     items = [{"id": "lh:1", "title": "파주", "sum": s, "ai": {"sig": "s", "blocks": [{"block": "F10"}], "src": ["공고문.pdf"]}}]
     st = A.enrich(items, "2026-10-14 16:00", log=lambda *_: None, fetch=files.__getitem__, caller=caller)
-    assert "500%" in seen["p"] and items[0]["ai"]["src"] == ["05.지구단위계획시행지침.zip"] and items[0]["ai"]["retried"]
+    assert "500%" in seen["p"] and items[0]["ai"]["src"] == ["05.지구단위계획시행지침.zip"] and items[0]["ai"]["plan_retry"] == 1
     assert "새로 요약 1건" in st["message"]
     seen.clear()
     A.enrich(items, "x", log=lambda *_: None, fetch=files.__getitem__, caller=caller)
