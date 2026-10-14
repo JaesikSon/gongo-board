@@ -461,3 +461,37 @@ def test_ai_summary_monthly_budget_stops(monkeypatch, tmp_path):
               "files": [{"kind": "지구단위계획", "name": "a.hwpx", "url": "u"}]}}]
     st = A.enrich(items, "2026-10-14 08:00", log=lambda *_: None, fetch=lambda u: b"", caller=lambda *a: called.append(1))
     assert not called and "상한" in st["message"] and "ai" not in items[0]
+
+
+def test_ai_summary_reads_zip_and_skips_broken_file(monkeypatch, tmp_path):
+    import io
+    import zipfile
+    import ai_summary as A
+    monkeypatch.setattr(A, "USAGE", tmp_path / "u.json")
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test")
+    inner = io.BytesIO()
+    with zipfile.ZipFile(inner, "w") as z:
+        z.writestr("Contents/section0.xml", "<hp:p>F10 허용용도 공동주택 용적률 500% 이하 건폐율 70%</hp:p>")
+    outer = io.BytesIO()
+    with zipfile.ZipFile(outer, "w") as z:
+        z.writestr("지침/시행지침.hwpx", inner.getvalue())
+        z.writestr("readme.txt", "x")
+    files = {"zip": outer.getvalue(), "bad": b"not a zip at all"}
+    assert any("500%" in p for p in A.pages_of("05.지구단위계획시행지침.zip", files["zip"]))
+    assert A.pages_of("broken.hwpx", files["bad"]) == []
+    seen = {}
+
+    def caller(key, model, prompt):
+        seen["p"] = prompt
+        return '{"blocks":[{"block":"F10","far":"500% 이하"}],"common":[]}', {"input_tokens": 10, "output_tokens": 5}
+    s = {"sig": "s", "plots": [{"block": "F10", "use": "주상복합용지", "area": 25904}],
+         "files": [{"kind": "지구단위계획", "name": "결정조서.hwpx", "url": "bad"},
+                   {"kind": "지구단위계획", "name": "05.지구단위계획시행지침.zip", "url": "zip"}]}
+    # 예전에 지구단위계획 없이(공고문만으로) 요약된 기록 → 한 번 다시 요약
+    items = [{"id": "lh:1", "title": "파주", "sum": s, "ai": {"sig": "s", "blocks": [{"block": "F10"}], "src": ["공고문.pdf"]}}]
+    st = A.enrich(items, "2026-10-14 16:00", log=lambda *_: None, fetch=files.__getitem__, caller=caller)
+    assert "500%" in seen["p"] and items[0]["ai"]["src"] == ["05.지구단위계획시행지침.zip"] and items[0]["ai"]["retried"]
+    assert "새로 요약 1건" in st["message"]
+    seen.clear()
+    A.enrich(items, "x", log=lambda *_: None, fetch=files.__getitem__, caller=caller)
+    assert not seen  # 다시 하지 않음
