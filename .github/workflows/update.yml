@@ -46,6 +46,7 @@ jobs:
           ONBID_API_KEY: ${{ secrets.ONBID_API_KEY }}
           LH_API_KEY: ${{ secrets.LH_API_KEY }}
           VWORLD_KEY: ${{ secrets.VWORLD_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           ONBID_INCLUDE_PVCT: ${{ vars.ONBID_INCLUDE_PVCT || 'false' }}
           DEV_ONLY: ${{ vars.DEV_ONLY || 'true' }}
           LAND_ONLY: ${{ vars.LAND_ONLY || 'true' }}
