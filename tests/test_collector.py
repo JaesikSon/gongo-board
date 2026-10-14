@@ -380,10 +380,11 @@ def test_lh_enrich_reuses_when_files_unchanged(monkeypatch):
     assert "새로 요약 1건, 재사용 1건" in st["message"]
 
 
-def test_ai_summary_inert_without_key_and_parses_hwpx(monkeypatch):
+def test_ai_summary_inert_without_key_and_parses_hwpx(monkeypatch, tmp_path):
     import io
     import zipfile
     import ai_summary
+    monkeypatch.setattr(ai_summary, "USAGE", tmp_path / "ai_usage.json")
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
     items = [{"id": "lh:1", "src": "LH", "title": "t", "sum": {"sig": "s", "files": [{"kind": "지구단위계획"}]}}]
     st = ai_summary.enrich(items, "2026-10-14 08:00")
@@ -394,7 +395,7 @@ def test_ai_summary_inert_without_key_and_parses_hwpx(monkeypatch):
         z.writestr("Contents/section0.xml", "<hp:p>구분 | 기정 | 변경</hp:p><hp:tr><hp:tc>B2</hp:tc><hp:tc>용적률 180% 이하</hp:tc>"
                    "<hp:tc>용적률 200% 이하</hp:tc></hp:tr><hp:p>건폐율 60% 이하, 최고층수 25층</hp:p>")
     files = {"u1": buf.getvalue()}
-    s = {"sig": "s", "plots": [{"block": "B2"}],
+    s = {"sig": "s", "plots": [{"block": "B2", "use": "공동주택용지", "area": 19900}],
          "files": [{"kind": "지구단위계획", "name": "결정조서.hwpx", "url": "u1"}, {"kind": "공고문", "name": "a.hwp", "url": "x"}]}
     seen = {}
 
@@ -409,6 +410,7 @@ def test_ai_summary_inert_without_key_and_parses_hwpx(monkeypatch):
     ai = items[0]["ai"]
     assert ai["blocks"][0]["far"] == "200% 이하" and ai["blocks"][0]["other"] == ["주동 배치"] and ai["sig"] == "s"
     assert ai["common"] == ["공공보행통로 설치"] and "새로 요약 1건" in st["message"]
+    assert "(1회)" in st["message"] and json.loads((tmp_path / "ai_usage.json").read_text())["calls"] == 1
     # 첨부 그대로면 다시 부르지 않는다
     seen.clear()
     ai_summary.enrich(items, "x", log=lambda *_: None, fetch=files.__getitem__, caller=caller)
@@ -428,3 +430,34 @@ def test_lh_summary_fills_price_from_page_when_sheet_lacks_it():
         lhdetail.read_sheet = orig
     p = s["plots"][0]
     assert s["plots_src"] == "필지목록" and p["far"] == "200% 이하" and p["price"] == 30745500000 and p["deposit"] == 1000000000
+
+
+def test_ai_summary_scope_rules():
+    import ai_summary as A
+    today = "2026-10-14"
+    big_apt = {"sum": {"plots": [{"use": "공동주택용지", "area": 19900}], "schedule": {"신청일시": "2026.10.15 (10:00 ~ 16:00)"}}}
+    assert A.why_not(big_apt, today) == ""
+    small = {"sum": {"plots": [{"use": "공동주택용지", "area": 4900}], "schedule": {}}}  # 1,482평
+    assert A.why_not(small, today).startswith("조건")
+    shop = {"sum": {"plots": [{"use": "일반상업용지", "area": 9000}, {"use": "근린생활시설용지", "area": 6000}]}}
+    assert A.why_not(shop, today).startswith("조건")
+    mixed = {"sum": {"plots": [{"use": "주상복합용지", "area": 5000}, {"use": "준주거용지", "area": 800}]}}
+    assert A.why_not(mixed, today) == "" and len(A.eligible_plots(mixed)) == 1
+    closed = {"sum": {"plots": [{"use": "공동주택용지", "area": 20000}],
+                      "schedule": {"신청일시": "2026.10.01 (10:00 ~ 16:00)", "계약체결일정": "2026.10.20 ~ 2026.10.21"}}}
+    assert A.why_not(closed, today) == "마감"  # 계약일정은 마감 판단에서 제외
+    no_plots = {"cat": "공동주택", "area": 6000, "end": "2026-11-01", "sum": {"plots": []}}
+    assert A.why_not(no_plots, today) == ""
+    assert not A.is_housing("단독주택용지") and A.is_housing("아파트(60~85㎡ 공동)")
+
+
+def test_ai_summary_monthly_budget_stops(monkeypatch, tmp_path):
+    import ai_summary as A
+    monkeypatch.setattr(A, "USAGE", tmp_path / "u.json")
+    monkeypatch.setattr(A, "BUDGET", 0.1)
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test")
+    called = []
+    items = [{"id": "lh:9", "title": "t", "sum": {"sig": "s", "plots": [{"use": "공동주택용지", "area": 20000}],
+              "files": [{"kind": "지구단위계획", "name": "a.hwpx", "url": "u"}]}}]
+    st = A.enrich(items, "2026-10-14 08:00", log=lambda *_: None, fetch=lambda u: b"", caller=lambda *a: called.append(1))
+    assert not called and "상한" in st["message"] and "ai" not in items[0]
