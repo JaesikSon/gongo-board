@@ -579,16 +579,19 @@ async function exportDocx(r){
 async function exportPptx(r){
   await loadLib('pptx');
   const R = reportOf(r), P = new PptxGenJS();
-  P.layout = 'LAYOUT_WIDE'; P.title = R.title;
+  // 슬라이드 크기: PowerPoint 'A4 용지(210x297mm)' 프리셋 = 27.52 x 19.05 cm
+  P.defineLayout({ name: 'A4', width: 10.83, height: 7.5 }); P.layout = 'A4'; P.title = R.title;
+  const SW = 10.83, M = 0.45, CW = SW - M * 2;
   const FONT = 'Malgun Gothic', ACC = '1F5F4A', INK = '1D1F22', MUT = '6B6F76', LINE = 'DDDBD4', SOFT = 'F3F2EE';
   const T = { fontFace: FONT, color: INK };
+  const short = v => String(v || '').split(' (')[0].split(' / ')[0];
   const header = (sl, title, sub) => {
     sl.background = { color: 'FFFFFF' };
-    sl.addShape(P.shapes.RECTANGLE, { x: 0, y: 0, w: 13.33, h: 0.12, fill: { color: ACC }, line: { color: ACC } });
-    sl.addText(title, { ...T, x: 0.5, y: 0.3, w: 12.3, h: 0.6, fontSize: 22, bold: true, fit: 'shrink' });
-    if (sub) sl.addText(sub, { ...T, x: 0.5, y: 0.88, w: 12.3, h: 0.35, fontSize: 11, color: MUT });
-    sl.addText(DISCLAIMER, { ...T, x: 0.5, y: 7.05, w: 10.5, h: 0.3, fontSize: 8, color: MUT });
-    sl.addText(`작성 ${R.made}`, { ...T, x: 11, y: 7.05, w: 1.83, h: 0.3, fontSize: 8, color: MUT, align: 'right' });
+    sl.addShape(P.shapes.RECTANGLE, { x: 0, y: 0, w: SW, h: 0.12, fill: { color: ACC }, line: { color: ACC } });
+    sl.addText(title, { ...T, x: M, y: 0.28, w: CW, h: 0.7, fontSize: 20, bold: true, valign: 'top' });
+    if (sub) sl.addText(sub, { ...T, x: M, y: 0.98, w: CW, h: 0.32, fontSize: 10, color: MUT });
+    sl.addText(DISCLAIMER, { ...T, x: M, y: 7.05, w: CW - 1.5, h: 0.3, fontSize: 7, color: MUT });
+    sl.addText(`작성 ${R.made}`, { ...T, x: SW - M - 1.5, y: 7.05, w: 1.5, h: 0.3, fontSize: 7, color: MUT, align: 'right' });
   };
   const kvRows = rows => rows.map(([k, v]) => [
     { text: k, options: { bold: true, color: MUT, fill: { color: SOFT } } }, { text: String(v) }]);
@@ -597,44 +600,46 @@ async function exportPptx(r){
   const s1 = P.addSlide();
   header(s1, R.title, [R.org, R.posted && `게시 ${R.posted}`, R.end && `마감 ${R.end}`].filter(Boolean).join('  ·  '));
   const tiles = [['대지면적', areaTxt(R.area)],
-                 ['토지비', R.supply ? won(R.supply) + (R.area ? `  (평당 ${won(Math.round(R.supply/(R.area*PY)))})` : '') : ''],
-                 ['용적률', R.key.find(k => k[0]==='용적률')?.[1] || ''],
-                 ['층수·높이', R.key.find(k => k[0]==='층수·높이')?.[1] || '']].filter(([, v]) => v);
+                 ['토지비', R.supply ? won(R.supply) + (R.area ? ` (평당 ${won(Math.round(R.supply/(R.area*PY)))})` : '') : ''],
+                 ['용적률', short(R.key.find(k => k[0]==='용적률')?.[1])],
+                 ['층수·높이', short(R.key.find(k => k[0]==='층수·높이')?.[1])]].filter(([, v]) => v);
+  const TW = (CW - 0.15 * 3) / 4;
   tiles.forEach(([k, v], i) => {
-    const x = 0.5 + i * 3.1;
-    s1.addShape(P.shapes.ROUNDED_RECTANGLE, { x, y: 1.45, w: 2.95, h: 1.15, fill: { color: 'E3EFE9' }, line: { color: 'E3EFE9' }, rectRadius: 0.08 });
-    s1.addText(k, { ...T, x: x + 0.15, y: 1.52, w: 2.65, h: 0.3, fontSize: 10, color: ACC, bold: true });
-    s1.addText(v, { ...T, x: x + 0.15, y: 1.82, w: 2.65, h: 0.7, fontSize: 15, bold: true, fit: 'shrink', valign: 'top' });
+    const x = M + i * (TW + 0.15);
+    s1.addShape(P.shapes.ROUNDED_RECTANGLE, { x, y: 1.45, w: TW, h: 1.1, fill: { color: 'E3EFE9' }, line: { color: 'E3EFE9' }, rectRadius: 0.08 });
+    s1.addText(k, { ...T, x: x + 0.12, y: 1.5, w: TW - 0.24, h: 0.3, fontSize: 10, color: ACC, bold: true });
+    s1.addText(v, { ...T, x: x + 0.12, y: 1.8, w: TW - 0.24, h: 0.7, fontSize: 13, bold: true, valign: 'top' });
   });
-  s1.addTable(kvRows(R.key.filter(([k]) => !['대지면적'].includes(k))), { ...T, x: 0.5, y: 2.85, w: 7.4, colW: [1.6, 5.8], fontSize: 10.5,
-    border: { type: 'solid', pt: 0.75, color: LINE }, margin: 0.06, valign: 'middle', autoPage: false });
+  s1.addTable(kvRows(R.key.filter(([k]) => k !== '대지면적')), { ...T, x: M, y: 2.8, w: 5.9, colW: [1.35, 4.55], fontSize: 10,
+    border: { type: 'solid', pt: 0.75, color: LINE }, margin: 0.05, valign: 'middle' });
   if (R.schedule.length) {
-    s1.addText('공급 일정', { ...T, x: 8.2, y: 2.85, w: 4.6, h: 0.35, fontSize: 12, bold: true, color: ACC });
-    s1.addTable(kvRows(R.schedule.slice(0, 8)), { ...T, x: 8.2, y: 3.25, w: 4.63, colW: [1.75, 2.88], fontSize: 9.5,
-      border: { type: 'solid', pt: 0.75, color: LINE }, margin: 0.05 });
+    s1.addText('공급 일정', { ...T, x: 6.6, y: 2.8, w: 3.78, h: 0.32, fontSize: 12, bold: true, color: ACC });
+    s1.addTable(kvRows(R.schedule.slice(0, 8)), { ...T, x: 6.6, y: 3.18, w: 3.78, colW: [1.45, 2.33], fontSize: 9,
+      border: { type: 'solid', pt: 0.75, color: LINE }, margin: 0.04 });
   }
-  s1.addText('원문 공고 열기', { ...T, x: 8.2, y: 6.55, w: 4.6, h: 0.35, fontSize: 10, color: ACC, hyperlink: { url: R.url } });
+  s1.addText('원문 공고 열기', { ...T, x: 6.6, y: 6.6, w: 3.78, h: 0.32, fontSize: 10, color: ACC, hyperlink: { url: R.url } });
 
   // 2) 지구단위계획 (블록별)
   if (R.blocks.length) {
     R.blocks.slice(0, 8).forEach(b => {
       const sl = P.addSlide();
-      header(sl, `지구단위계획 인허가 제한 · ${b.block}`, `${b.use || ''}${R.aiSample ? '   (AI 요약 견본)' : '   (AI 요약)'}${b.pages ? '   근거: ' + b.pages : ''}`);
-      sl.addTable(kvRows(BLOCK_FIELDS.filter(([, k]) => b[k] && k !== 'use').map(([l, k]) => [l, b[k]])), { ...T, x: 0.5, y: 1.45, w: 6.6, colW: [1.4, 5.2],
-        fontSize: 11, border: { type: 'solid', pt: 0.75, color: LINE }, margin: 0.07, valign: 'middle' });
+      header(sl, `지구단위계획 인허가 제한 · ${b.block}`, `${b.use || ''}${R.aiSample ? '  (AI 요약 견본)' : '  (AI 요약)'}${b.pages ? '  근거: ' + b.pages : ''}`);
+      sl.addTable(kvRows(BLOCK_FIELDS.filter(([, k]) => b[k] && k !== 'use').map(([l, k]) => [l, b[k]])), { ...T, x: M, y: 1.45, w: 5.3, colW: [1.15, 4.15],
+        fontSize: 10, border: { type: 'solid', pt: 0.75, color: LINE }, margin: 0.06, valign: 'middle' });
       const items = [...(b.other || []).map(x => ({ t: x })), ...(R.common.length ? [{ h: '지구 공통·공고 유의사항' }] : []), ...R.common.map(x => ({ t: x }))];
-      sl.addText('주요 규제', { ...T, x: 7.4, y: 1.45, w: 5.4, h: 0.35, fontSize: 12, bold: true, color: ACC });
+      const fs = items.length > 9 ? 9 : 10;
+      sl.addText('주요 규제', { ...T, x: 6.0, y: 1.45, w: 4.38, h: 0.32, fontSize: 12, bold: true, color: ACC });
       sl.addText(items.map(it => it.h
-          ? { text: it.h, options: { bold: true, color: ACC, breakLine: true, paraSpaceBefore: 8 } }
+          ? { text: it.h, options: { bold: true, color: ACC, breakLine: true, paraSpaceBefore: 6 } }
           : { text: it.t, options: { bullet: true, breakLine: true } }),
-        { ...T, x: 7.4, y: 1.85, w: 5.43, h: 5.0, fontSize: 10.5, valign: 'top', paraSpaceAfter: 4, fit: 'shrink' });
+        { ...T, x: 6.0, y: 1.82, w: 4.38, h: 5.1, fontSize: fs, valign: 'top', paraSpaceAfter: 3 });
     });
   } else {
     const sl = P.addSlide();
     header(sl, '지구단위계획', '세부 제한(층수·높이·허용용도)은 원문에서 확인하세요');
     const pf = R.files.filter(f => f.kind === '지구단위계획' || f.kind === '공고문');
     sl.addText(pf.length ? pf.map(f => ({ text: `[${f.kind}] ${f.name}`, options: { bullet: true, breakLine: true, hyperlink: { url: f.url } } }))
-      : '첨부된 지구단위계획 문서가 없습니다.', { ...T, x: 0.5, y: 1.45, w: 12.3, h: 3, fontSize: 12, valign: 'top' });
+      : '첨부된 지구단위계획 문서가 없습니다.', { ...T, x: M, y: 1.45, w: CW, h: 3, fontSize: 11, valign: 'top' });
   }
 
   // 3) 필지 목록
@@ -642,11 +647,19 @@ async function exportPptx(r){
     const sl = P.addSlide();
     header(sl, `공급 필지 (${R.plots.length}필지)`, R.plotsSrc === '필지목록' ? '첨부 필지목록 엑셀 기준' : 'LH 상세페이지 기준');
     const head = PLOT_HEAD.map(t => ({ text: t, options: { bold: true, color: 'FFFFFF', fill: { color: ACC } } }));
-    sl.addTable([head, ...R.plots.slice(0, 120).map(p => plotRow(p).map(t => ({ text: t })))], { ...T, x: 0.5, y: 1.4, w: 12.33,
-      colW: [1.6, 2.4, 1.5, 1.25, 1.45, 1.5, 1.6, 1.03], fontSize: 9, border: { type: 'solid', pt: 0.5, color: LINE }, margin: 0.04,
+    sl.addTable([head, ...R.plots.slice(0, 120).map(p => plotRow(p).map(t => ({ text: t })))], { ...T, x: M, y: 1.4, w: CW,
+      colW: [1.3, 1.95, 1.2, 1.0, 1.2, 1.2, 1.25, 0.83], fontSize: 8, border: { type: 'solid', pt: 0.5, color: LINE }, margin: 0.04,
       autoPage: true, autoPageRepeatHeader: true, autoPageSlideStartY: 1.4, newSlideStartY: 1.4 });
   }
-  const blob = await P.write({ outputType: 'blob' });
+
+  // 모든 글자에 윤곽선: 흰색 · 투명도 90% · 0.75pt
+  const LN = '<a:ln w="9525"><a:solidFill><a:srgbClr val="FFFFFF"><a:alpha val="10000"/></a:srgbClr></a:solidFill></a:ln>';
+  const zip = await JSZip.loadAsync(await P.write({ outputType: 'arraybuffer' }));
+  for (const f of Object.keys(zip.files).filter(n => /^ppt\/slides\/slide\d+\.xml$/.test(n))) {
+    const xml = await zip.file(f).async('string');
+    zip.file(f, xml.replace(/<a:rPr(\s[^>]*?)?(\/?)>/g, (m, attrs = '', slash) => slash ? `<a:rPr${attrs}>${LN}</a:rPr>` : `<a:rPr${attrs}>${LN}`));
+  }
+  const blob = await zip.generateAsync({ type: 'blob', mimeType: 'application/vnd.openxmlformats-officedocument.presentationml.presentation' });
   download(blob, `${safeName(R.title)}_요약.pptx`);
 }
 
