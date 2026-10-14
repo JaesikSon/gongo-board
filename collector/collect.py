@@ -20,8 +20,10 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
 
+import ai_summary  # noqa: E402
 import boards  # noqa: E402
 import lh  # noqa: E402
+import lhdetail  # noqa: E402
 import onbid  # noqa: E402
 import results  # noqa: E402
 import zoning  # noqa: E402
@@ -173,6 +175,10 @@ def main() -> int:
                 r["cat"], r["cat_src"] = c, "용도지역"
     if LAND_ONLY:  # 용도지역이 녹지·관리·공업 등으로 확인된 물건 제외
         act = [r for r in act if r.get("kind") != "물건" or is_land_record(r)]
+    print("LH 공고 요약…")
+    statuses.append(lhdetail.enrich(act, prev_items))
+    print("지구단위계획 AI 요약…")
+    statuses.append(ai_summary.enrich(act, stamp))
 
     n_win = sum(1 for r in arch if (r.get("res") or {}).get("stat") == "낙찰")
     dump(OUT, {"updated": stamp, "total": len(act),
