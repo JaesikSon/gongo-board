@@ -95,7 +95,9 @@ sources:
   - {name: 용인도시공사, sido: 경기, type: 지방공기업, homepage: "https://www.yuc.co.kr"}
   - {name: 평택도시공사, sido: 경기, type: 지방공기업, homepage: "https://www.puc.or.kr"}
   - {name: 구리도시공사, sido: 경기, type: 지방공기업, homepage: "https://www.guriuc.or.kr"}
-  # 주소 확인 필요(수집 서버에서 접속 안 됨): 광주도시관리공사, 의정부도시공사, 포천도시공사
+  - {name: 의정부도시공사, sido: 경기, type: 지방공기업, homepage: "https://www.uiuc.or.kr"}
+  - {name: 포천도시공사, sido: 경기, type: 지방공기업, homepage: "https://www.pcuc.kr"}
+  - {name: 광주도시관리공사, sido: 경기, type: 지방공기업, homepage: "https://www.gumc.or.kr"}
 
   # ── 중앙 공공기관 (역세권·철도부지·국유지 개발 공모) ─────────────────
   - name: 국가철도공단
