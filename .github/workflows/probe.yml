@@ -34,6 +34,8 @@ jobs:
            "포천도시공사": ["pcuc.or.kr", "pocheonuc.or.kr", "pochunuc.or.kr"],
            "하남도시공사": ["huic.co.kr", "hnuc.or.kr"], "화성도시공사": ["hsuco.or.kr", "hsuc.or.kr", "hsucorp.or.kr"],
            "고양도시관리공사": ["gys.or.kr", "goyangcmc.or.kr"],
+           "국가철도공단": ["kr.or.kr"], "한국철도공사(코레일)": ["info.korail.com", "korail.com"],
+           "한국자산관리공사(캠코)": ["kamco.or.kr"], "한국수자원공사": ["kwater.or.kr"], "한국도로공사": ["ex.co.kr"],
           }
           KW = re.compile(r"공고|공지|분양|매각|사업|공모|입찰|토지|용지|공급")
           H = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124 Safari/537.36", "Accept-Language": "ko-KR,ko"}
