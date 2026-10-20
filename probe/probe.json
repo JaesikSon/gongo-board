@@ -1,0 +1,1252 @@
+{
+ "서울주택도시개발공사(SH)": [
+  {
+   "try": "https://www.i-sh.co.kr",
+   "status": 200,
+   "url": "https://www.i-sh.co.kr/",
+   "title": "SH 서울주택도시개발공사",
+   "bytes": 1086,
+   "links": []
+  }
+ ],
+ "과천도시공사": [
+  {
+   "try": "https://www.gcuc.or.kr",
+   "status": 200,
+   "url": "https://www.gcuc.or.kr/fmcs/1",
+   "title": "과천도시공사",
+   "bytes": 42682,
+   "links": [
+    [
+     "공지사항",
+     "https://www.gcuc.or.kr/fmcs/49"
+    ],
+    [
+     "개발사업",
+     "https://www.gcuc.or.kr/fmcs/722"
+    ],
+    [
+     "사업별이행표준",
+     "https://www.gcuc.or.kr/fmcs/263"
+    ],
+    [
+     "개발사업",
+     "https://www.gcuc.or.kr/fmcs/725"
+    ],
+    [
+     "공공주택지구조성사업",
+     "https://www.gcuc.or.kr/fmcs/727"
+    ],
+    [
+     "공공주택건설사업",
+     "https://www.gcuc.or.kr/fmcs/741"
+    ],
+    [
+     "공공건설사업",
+     "https://www.gcuc.or.kr/fmcs/743"
+    ],
+    [
+     "지식정보타운 복합지원센터 건립사업",
+     "https://www.gcuc.or.kr/fmcs/1203"
+    ],
+    [
+     "입찰/수의계약 내역",
+     "https://www.gcuc.or.kr/fmcs/61"
+    ],
+    [
+     "주요사업/시설",
+     "https://www.gcuc.or.kr/fmcs/68"
+    ],
+    [
+     "채용공고",
+     "https://www.gcuc.or.kr/fmcs/227"
+    ],
+    [
+     "채용지원절차",
+     "https://www.gcuc.or.kr/fmcs/226"
+    ],
+    [
+     "사업안내",
+     "https://www.gcuc.or.kr/fmcs/265"
+    ]
+   ]
+  }
+ ],
+ "광명도시공사": [
+  {
+   "try": "https://www.gmuc.co.kr",
+   "status": 200,
+   "url": "https://www.gmuc.co.kr/",
+   "title": "광명도시공사",
+   "bytes": 58604,
+   "links": [
+    [
+     "사업장전화번호",
+     "https://www.gmuc.co.kr/user/conn/corpOrgan.do"
+    ]
+   ]
+  },
+  {
+   "try": "https://www.gmuc.or.kr",
+   "status": 200,
+   "url": "https://www.gmuc.or.kr/",
+   "title": "main page redirect...",
+   "bytes": 221,
+   "links": []
+  }
+ ],
+ "광주도시관리공사": [
+  {
+   "try": "https://www.gjuc.or.kr",
+   "err": "ConnectionError: HTTPSConnectionPool(host='www.gjuc.or.kr', port=443): Max retries exceeded with url: / (Ca"
+  },
+  {
+   "try": "https://gjuc.or.kr",
+   "err": "ConnectionError: HTTPSConnectionPool(host='gjuc.or.kr', port=443): Max retries exceeded with url: / (Caused"
+  },
+  {
+   "try": "http://www.gjuc.or.kr",
+   "err": "ConnectionError: HTTPConnectionPool(host='www.gjuc.or.kr', port=80): Max retries exceeded with url: / (Caus"
+  },
+  {
+   "try": "https://www.gjcmc.or.kr",
+   "err": "ConnectionError: HTTPSConnectionPool(host='www.gjcmc.or.kr', port=443): Max retries exceeded with url: / (C"
+  },
+  {
+   "try": "https://gjcmc.or.kr",
+   "err": "ConnectionError: HTTPSConnectionPool(host='gjcmc.or.kr', port=443): Max retries exceeded with url: / (Cause"
+  },
+  {
+   "try": "http://www.gjcmc.or.kr",
+   "err": "ConnectionError: HTTPConnectionPool(host='www.gjcmc.or.kr', port=80): Max retries exceeded with url: / (Cau"
+  },
+  {
+   "try": "https://www.gjuc.co.kr",
+   "err": "ConnectionError: HTTPSConnectionPool(host='www.gjuc.co.kr', port=443): Max retries exceeded with url: / (Ca"
+  },
+  {
+   "try": "https://gjuc.co.kr",
+   "err": "ConnectionError: HTTPSConnectionPool(host='gjuc.co.kr', port=443): Max retries exceeded with url: / (Caused"
+  },
+  {
+   "try": "http://www.gjuc.co.kr",
+   "err": "ConnectionError: HTTPConnectionPool(host='www.gjuc.co.kr', port=80): Max retries exceeded with url: / (Caus"
+  }
+ ],
+ "구리도시공사": [
+  {
+   "try": "https://www.guriuc.or.kr",
+   "err": "ConnectTimeout: HTTPSConnectionPool(host='www.guriuc.or.kr', port=443): Max retries exceeded with url: / ("
+  },
+  {
+   "try": "https://guriuc.or.kr",
+   "err": "ConnectTimeout: HTTPSConnectionPool(host='guriuc.or.kr', port=443): Max retries exceeded with url: / (Caus"
+  },
+  {
+   "try": "http://www.guriuc.or.kr",
+   "err": "ConnectTimeout: HTTPConnectionPool(host='www.guriuc.or.kr', port=80): Max retries exceeded with url: / (Ca"
+  },
+  {
+   "try": "https://www.guric.or.kr",
+   "err": "ConnectionError: HTTPSConnectionPool(host='www.guric.or.kr', port=443): Max retries exceeded with url: / (C"
+  },
+  {
+   "try": "https://guric.or.kr",
+   "err": "ConnectionError: HTTPSConnectionPool(host='guric.or.kr', port=443): Max retries exceeded with url: / (Cause"
+  },
+  {
+   "try": "http://www.guric.or.kr",
+   "err": "ConnectionError: HTTPConnectionPool(host='www.guric.or.kr', port=80): Max retries exceeded with url: / (Cau"
+  }
+ ],
+ "군포도시공사": [
+  {
+   "try": "https://www.gunpouc.or.kr",
+   "status": 200,
+   "url": "https://www.gunpouc.or.kr/",
+   "title": "군포도시공사",
+   "bytes": 3941,
+   "links": []
+  }
+ ],
+ "김포도시공사": [
+  {
+   "try": "https://www.guc.or.kr",
+   "status": 200,
+   "url": "https://www.guc.or.kr/",
+   "title": "김포도시공사",
+   "bytes": 107559,
+   "links": [
+    [
+     "사업소개",
+     "https://www.guc.or.kr/business/city.php"
+    ],
+    [
+     "주택사업",
+     "https://www.guc.or.kr/business/house.php"
+    ],
+    [
+     "건축사업",
+     "https://www.guc.or.kr/business/architecture.php"
+    ],
+    [
+     "토목사업",
+     "https://www.guc.or.kr/business/civil.php"
+    ],
+    [
+     "사업별이행기준",
+     "https://www.guc.or.kr/citizen/standard_01.php"
+    ],
+    [
+     "공지사항",
+     "https://www.guc.or.kr/notice/notice.php"
+    ],
+    [
+     "고시 및 공고",
+     "https://www.guc.or.kr/notice/gosi.php"
+    ],
+    [
+     "입찰공고",
+     "https://www.guc.or.kr/notice/bidding.php"
+    ],
+    [
+     "채용공고",
+     "https://www.guc.or.kr/notice/recruit.php"
+    ],
+    [
+     "채용공고 알림문자 서비스",
+     "https://www.guc.or.kr/notice/recruit_inform_ban.php"
+    ],
+    [
+     "분양/보상",
+     "https://www.guc.or.kr/notice/compensation.php"
+    ],
+    [
+     "사업장안내",
+     "https://www.guc.or.kr/gimpo/busi_location.php"
+    ],
+    [
+     "사업연속성경영방침",
+     "https://www.guc.or.kr/gimpo/safety02.php"
+    ],
+    [
+     "공지사항",
+     "https://www.guc.or.kr/facility/culture_cityhall_notice.php"
+    ],
+    [
+     "공지사항",
+     "https://www.guc.or.kr/facility/culture_mobilitysupport_board.php"
+    ],
+    [
+     "공지사항",
+     "https://www.guc.or.kr/facility/health_sportscomplex_notice.php"
+    ],
+    [
+     "공지사항",
+     "https://www.guc.or.kr/facility/health_farmersfishermen_notice.php"
+    ],
+    [
+     "공지사항",
+     "https://www.guc.or.kr/facility/health_geolpo_notice.php"
+    ],
+    [
+     "공지사항",
+     "https://www.guc.or.kr/facility/health_noheul_notice.php"
+    ],
+    [
+     "공지사항",
+     "https://www.guc.or.kr/facility/park_taesan_notice.php"
+    ],
+    [
+     "공지사항",
+     "https://www.guc.or.kr/facility/park_marinepark_notice.php"
+    ],
+    [
+     "입찰공고",
+     "https://www.guc.or.kr/citizen/govv3_accounting_01.php"
+    ]
+   ]
+  }
+ ],
+ "남양주도시공사": [
+  {
+   "try": "https://www.ncuc.or.kr",
+   "status": 200,
+   "url": "https://www.ncuc.or.kr/",
+   "title": "남양주도시공사",
+   "bytes": 5012,
+   "links": []
+  }
+ ],
+ "부천도시공사": [
+  {
+   "try": "https://www.best.or.kr",
+   "status": 200,
+   "url": "https://www.best.or.kr/fmcs/1",
+   "title": "부천도시공사",
+   "bytes": 108604,
+   "links": [
+    [
+     "개발사업",
+     "https://www.best.or.kr/fmcs/643"
+    ],
+    [
+     "개발대행사업",
+     "https://www.best.or.kr/fmcs/400"
+    ],
+    [
+     "R&D 종합센터 조성 사업(완료)",
+     "https://www.best.or.kr/fmcs/398"
+    ],
+    [
+     "수소충전소 구축 사업(완료)",
+     "https://www.best.or.kr/fmcs/282"
+    ],
+    [
+     "실내테니스장 건립 사업(완료)",
+     "https://www.best.or.kr/fmcs/399"
+    ],
+    [
+     "송내IC(북측) 공영주차장 조성 사업(완료)",
+     "https://www.best.or.kr/fmcs/280"
+    ],
+    [
+     "베르네천 복개부 도로 조성 사업(완료)",
+     "https://www.best.or.kr/fmcs/281"
+    ],
+    [
+     "개발대행사업 공지사항",
+     "https://www.best.or.kr/fmcs/645"
+    ],
+    [
+     "도시정비사업",
+     "https://www.best.or.kr/fmcs/1393"
+    ],
+    [
+     "심곡3-1구역 공공재개발 사업",
+     "https://www.best.or.kr/fmcs/1533"
+    ],
+    [
+     "정비사업 초기 사업성 분석 서비스",
+     "https://www.best.or.kr/fmcs/1752"
+    ],
+    [
+     "토지수용 및 보상",
+     "https://www.best.or.kr/fmcs/15"
+    ],
+    [
+     "주거취약계층 주거상향 지원사업",
+     "https://www.best.or.kr/fmcs/1357"
+    ],
+    [
+     "(주거위기가구) 임시거처 지원사업",
+     "https://www.best.or.kr/fmcs/1358"
+    ],
+    [
+     "주거환경 개선사업",
+     "https://www.best.or.kr/fmcs/1552"
+    ],
+    [
+     "전세사기 피해자 지원사업",
+     "https://www.best.or.kr/fmcs/1360"
+    ],
+    [
+     "체육사업",
+     "https://www.best.or.kr/fmcs/304"
+    ],
+    [
+     "주민참여예산 제안사업 신청",
+     "https://www.best.or.kr/fmcs/134"
+    ],
+    [
+     "공지사항",
+     "https://www.best.or.kr/fmcs/156"
+    ],
+    [
+     "채용공고",
+     "https://www.best.or.kr/fmcs/157"
+    ],
+    [
+     "모집공고",
+     "https://www.best.or.kr/fmcs/852"
+    ],
+    [
+     "주요공사사업계획",
+     "https://www.best.or.kr/fmcs/158"
+    ],
+    [
+     "나라장터(G2B) 입찰공고",
+     "http://open.best.or.kr/lB553888/bidInfoURL.do"
+    ],
+    [
+     "나라장터(G2B) 입찰결과",
+     "http://open.best.or.kr/lB553888/bidResultInfoURL.do"
+    ]
+   ]
+  }
+ ],
+ "성남도시개발공사": [
+  {
+   "try": "https://www.isdc.co.kr",
+   "status": 200,
+   "url": "https://www.isdc.co.kr/",
+   "title": "성남도시개발공사",
+   "bytes": 63828,
+   "links": [
+    [
+     "개발사업분야",
+     "https://www.isdc.co.kr/board/qna/boardQnaList.asp?HiddenBbsNo=52&Category=2"
+    ],
+    [
+     "개발사업시민제안",
+     "https://www.isdc.co.kr/board/qna/boardQnaList.asp?HiddenBbsNo=79"
+    ],
+    [
+     "수상실적 및 공모사업",
+     "https://www.isdc.co.kr/operBusiness/sj_award.asp"
+    ],
+    [
+     "수상실적 및 공모사업",
+     "https://www.isdc.co.kr/operBusiness/jw_award.asp"
+    ],
+    [
+     "차량등록사업소",
+     "https://www.seongnam.go.kr/city/1000853/10630/contents.do"
+    ],
+    [
+     "입찰안내",
+     "https://www.isdc.co.kr/operBusiness/snus_bidding_info.asp"
+    ],
+    [
+     "개발사업",
+     "https://www.isdc.co.kr/devWork/parcelOut0101.asp"
+    ],
+    [
+     "분양공고",
+     "https://www.isdc.co.kr/board/default/boardDefaultList.asp?HiddenBbsNo=50"
+    ],
+    [
+     "분양관련법령",
+     "https://www.isdc.co.kr/devWork/parcelOut0301.asp"
+    ],
+    [
+     "임대공고",
+     "https://www.isdc.co.kr/board/default/boardDefaultList.asp?HiddenBbsNo=61"
+    ],
+    [
+     "사업개요",
+     "https://www.isdc.co.kr/devWork/devWork0101.asp"
+    ],
+    [
+     "추진사업",
+     "https://www.isdc.co.kr/devWork/devWork0201.asp"
+    ],
+    [
+     "완료사업",
+     "https://www.isdc.co.kr/devWork/devWork0301.asp"
+    ],
+    [
+     "예산편성제안사업공모",
+     "https://www.isdc.co.kr/openBusiness/inovation05.asp"
+    ],
+    [
+     "공지사항",
+     "https://www.isdc.co.kr/board/default/boardDefaultList.asp?HiddenBbsNo=2"
+    ],
+    [
+     "채용공고",
+     "https://www.isdc.co.kr/board/default/boardDefaultList.asp?HiddenBbsNo=77"
+    ],
+    [
+     "고시공고",
+     "https://www.isdc.co.kr/board/default/boardDefaultList.asp?HiddenBbsNo=82"
+    ],
+    [
+     "입찰정보",
+     "https://www.isdc.co.kr/gov/infoContract0301.asp"
+    ],
+    [
+     "율동공원주차장 CCTV 설치 행정예고(공고)",
+     "https://www.isdc.co.kr/board/default/boardDefaultView.asp?HiddenState=VIEW&HiddenCode=2406&HiddenBbsNo=2"
+    ],
+    [
+     "2026년 4분기 기간제근로자 통합채용 공고",
+     "https://www.isdc.co.kr/board/default/boardDefaultView.asp?HiddenState=VIEW&HiddenCode=3110&HiddenBbsNo=77"
+    ],
+    [
+     "평생학습관스포츠센터 외래(시간)강사 공개 모집 공고",
+     "https://www.isdc.co.kr/board/default/boardDefaultView.asp?HiddenState=VIEW&HiddenCode=3109&HiddenBbsNo=77"
+    ],
+    [
+     "금곡공원국민체육센터 외래(시간)강사 공개모집 공고",
+     "https://www.isdc.co.kr/board/default/boardDefaultView.asp?HiddenState=VIEW&HiddenCode=3108&HiddenBbsNo=77"
+    ],
+    [
+     "공유재산공고 더보기",
+     "https://www.isdc.co.kr/board/default/boardDefaultList.asp?HiddenBbsNo=1"
+    ],
+    [
+     "주차장/견인사업소",
+     "https://park.isdc.co.kr/"
+    ],
+    [
+     "2026년 성남시 저출생 극복 콘텐츠 공모전",
+     "https://www.isdc.co.kr/board/photo/boardPhotoView.asp?HiddenState=VIEW&HiddenCode=999&HiddenBbsNo=4"
+    ]
+   ]
+  }
+ ],
+ "수원도시공사": [
+  {
+   "try": "https://www.suwonudc.co.kr",
+   "status": 200,
+   "url": "https://www.suwonudc.co.kr/",
+   "title": "수원도시공사",
+   "bytes": 926,
+   "links": []
+  }
+ ],
+ "시흥도시공사": [
+  {
+   "try": "https://www.shsi.or.kr",
+   "status": 200,
+   "url": "https://www.shsi.or.kr/",
+   "title": "시흥도시공사",
+   "bytes": 898,
+   "links": []
+  }
+ ],
+ "안산도시공사": [
+  {
+   "try": "https://www.ansanuc.net",
+   "status": 200,
+   "url": "https://www.ansanuc.net/",
+   "title": "안산도시공사",
+   "bytes": 506,
+   "links": []
+  }
+ ],
+ "안양도시공사": [
+  {
+   "try": "https://www.auc.or.kr",
+   "err": "SSLError: HTTPSConnectionPool(host='www.auc.or.kr', port=443): Max retries exceeded with url: / (Cau"
+  },
+  {
+   "try": "https://auc.or.kr",
+   "err": "SSLError: HTTPSConnectionPool(host='auc.or.kr', port=443): Max retries exceeded with url: / (Caused "
+  },
+  {
+   "try": "http://www.auc.or.kr",
+   "status": 200,
+   "url": "http://www.auc.or.kr/",
+   "title": "",
+   "bytes": 103,
+   "links": []
+  }
+ ],
+ "양주도시공사": [
+  {
+   "try": "https://www.yjuc.or.kr",
+   "status": 200,
+   "url": "https://www.yjuc.or.kr/",
+   "title": "양주도시공사",
+   "bytes": 2656,
+   "links": []
+  },
+  {
+   "try": "https://www.yangjuuc.or.kr",
+   "err": "ConnectionError: HTTPSConnectionPool(host='www.yangjuuc.or.kr', port=443): Max retries exceeded with url: /"
+  },
+  {
+   "try": "https://yangjuuc.or.kr",
+   "err": "ConnectionError: HTTPSConnectionPool(host='yangjuuc.or.kr', port=443): Max retries exceeded with url: / (Ca"
+  },
+  {
+   "try": "http://www.yangjuuc.or.kr",
+   "err": "ConnectionError: HTTPConnectionPool(host='www.yangjuuc.or.kr', port=80): Max retries exceeded with url: / ("
+  },
+  {
+   "try": "https://www.yjcmc.or.kr",
+   "status": 200,
+   "url": "https://yeojuuc.or.kr/",
+   "title": "여주도시공사",
+   "bytes": 113565,
+   "links": [
+    [
+     "개발 사업",
+     "javascript:fn_menu('gnb06');"
+    ],
+    [
+     "개발 사업",
+     "https://yeojuuc.or.kr/sub6/dev/ohak.do"
+    ],
+    [
+     "가남 일반산업단지 조성사업",
+     "https://yeojuuc.or.kr/sub6/dev/ganam.do"
+    ],
+    [
+     "농촌 신활력 플러스사업 (저온저장고 신축공사)",
+     "https://yeojuuc.or.kr/sub6/dev/farm.do"
+    ],
+    [
+     "공지사항",
+     "https://yeojuuc.or.kr/board/list.do?bbsId=BBSMSTR_000000000001"
+    ],
+    [
+     "고시/공고",
+     "https://yeojuuc.or.kr/board/list.do?bbsId=BBSMSTR_000000000021"
+    ],
+    [
+     "입찰정보",
+     "https://yeojuuc.or.kr/board/list.do?bbsId=BBSMSTR_000000000010"
+    ]
+   ]
+  }
+ ],
+ "여주도시공사": [
+  {
+   "try": "https://www.yeojuuc.or.kr",
+   "status": 200,
+   "url": "https://yeojuuc.or.kr/",
+   "title": "여주도시공사",
+   "bytes": 113565,
+   "links": [
+    [
+     "개발 사업",
+     "javascript:fn_menu('gnb06');"
+    ],
+    [
+     "개발 사업",
+     "https://yeojuuc.or.kr/sub6/dev/ohak.do"
+    ],
+    [
+     "가남 일반산업단지 조성사업",
+     "https://yeojuuc.or.kr/sub6/dev/ganam.do"
+    ],
+    [
+     "농촌 신활력 플러스사업 (저온저장고 신축공사)",
+     "https://yeojuuc.or.kr/sub6/dev/farm.do"
+    ],
+    [
+     "공지사항",
+     "https://yeojuuc.or.kr/board/list.do?bbsId=BBSMSTR_000000000001"
+    ],
+    [
+     "고시/공고",
+     "https://yeojuuc.or.kr/board/list.do?bbsId=BBSMSTR_000000000021"
+    ],
+    [
+     "입찰정보",
+     "https://yeojuuc.or.kr/board/list.do?bbsId=BBSMSTR_000000000010"
+    ]
+   ]
+  },
+  {
+   "try": "https://www.yjmc.or.kr",
+   "status": 200,
+   "url": "https://www.yjmc.or.kr/",
+   "title": "여주시외국인복지센터",
+   "bytes": 851539,
+   "links": [
+    [
+     "외국인주민 지원사업",
+     "https://www.yjmc.or.kr/1906726660"
+    ],
+    [
+     "공지사항",
+     "https://www.yjmc.or.kr/36"
+    ]
+   ]
+  },
+  {
+   "try": "https://www.yjcmc.or.kr",
+   "status": 200,
+   "url": "https://yeojuuc.or.kr/",
+   "title": "여주도시공사",
+   "bytes": 113565,
+   "links": [
+    [
+     "개발 사업",
+     "javascript:fn_menu('gnb06');"
+    ],
+    [
+     "개발 사업",
+     "https://yeojuuc.or.kr/sub6/dev/ohak.do"
+    ],
+    [
+     "가남 일반산업단지 조성사업",
+     "https://yeojuuc.or.kr/sub6/dev/ganam.do"
+    ],
+    [
+     "농촌 신활력 플러스사업 (저온저장고 신축공사)",
+     "https://yeojuuc.or.kr/sub6/dev/farm.do"
+    ],
+    [
+     "공지사항",
+     "https://yeojuuc.or.kr/board/list.do?bbsId=BBSMSTR_000000000001"
+    ],
+    [
+     "고시/공고",
+     "https://yeojuuc.or.kr/board/list.do?bbsId=BBSMSTR_000000000021"
+    ],
+    [
+     "입찰정보",
+     "https://yeojuuc.or.kr/board/list.do?bbsId=BBSMSTR_000000000010"
+    ]
+   ]
+  },
+  {
+   "try": "https://www.yeoju-uc.or.kr",
+   "err": "ConnectionError: HTTPSConnectionPool(host='www.yeoju-uc.or.kr', port=443): Max retries exceeded with url: /"
+  },
+  {
+   "try": "https://yeoju-uc.or.kr",
+   "err": "ConnectionError: HTTPSConnectionPool(host='yeoju-uc.or.kr', port=443): Max retries exceeded with url: / (Ca"
+  },
+  {
+   "try": "http://www.yeoju-uc.or.kr",
+   "err": "ConnectionError: HTTPConnectionPool(host='www.yeoju-uc.or.kr', port=80): Max retries exceeded with url: / ("
+  }
+ ],
+ "용인도시공사": [
+  {
+   "try": "https://www.yuc.co.kr",
+   "err": "ConnectTimeout: HTTPSConnectionPool(host='www.yuc.co.kr', port=443): Max retries exceeded with url: / (Cau"
+  },
+  {
+   "try": "https://yuc.co.kr",
+   "err": "ConnectTimeout: HTTPSConnectionPool(host='yuc.co.kr', port=443): Max retries exceeded with url: / (Caused "
+  },
+  {
+   "try": "http://www.yuc.co.kr",
+   "err": "ConnectTimeout: HTTPConnectionPool(host='www.yuc.co.kr', port=80): Max retries exceeded with url: / (Cause"
+  }
+ ],
+ "의왕도시공사": [
+  {
+   "try": "https://www.uuc.or.kr",
+   "status": 200,
+   "url": "https://www.uuc.or.kr/base/main/view",
+   "title": "의왕도시공사",
+   "bytes": 138262,
+   "links": [
+    [
+     "사업현황",
+     "https://www.uuc.or.kr:443/base/menu/baseView?menuLevel=2&menuNo=33"
+    ],
+    [
+     "사업공고",
+     "https://www.uuc.or.kr:443/base/board/list?boardManagementNo=1&menuLevel=2&menuNo=69"
+    ],
+    [
+     "고객만족공모",
+     "https://www.uuc.or.kr:443/base/board/list?boardManagementNo=53&menuLevel=2&menuNo=136"
+    ],
+    [
+     "공지사항",
+     "https://www.uuc.or.kr:443/base/board/list?boardManagementNo=17&menuLevel=3&menuNo=36"
+    ],
+    [
+     "입찰정보",
+     "https://www.uuc.or.kr:443/base/board/list?boardManagementNo=18&menuLevel=3&menuNo=37"
+    ],
+    [
+     "채용공고",
+     "https://www.uuc.or.kr:443/base/board/list?boardManagementNo=19&menuLevel=3&menuNo=87"
+    ],
+    [
+     "수의계약공고",
+     "https://www.uuc.or.kr:443/base/board/list?boardManagementNo=20&menuLevel=3&menuNo=88"
+    ]
+   ]
+  }
+ ],
+ "의정부도시공사": [
+  {
+   "try": "https://www.ujbuc.or.kr",
+   "err": "ConnectionError: HTTPSConnectionPool(host='www.ujbuc.or.kr', port=443): Max retries exceeded with url: / (C"
+  },
+  {
+   "try": "https://ujbuc.or.kr",
+   "err": "ConnectionError: HTTPSConnectionPool(host='ujbuc.or.kr', port=443): Max retries exceeded with url: / (Cause"
+  },
+  {
+   "try": "http://www.ujbuc.or.kr",
+   "err": "ConnectionError: HTTPConnectionPool(host='www.ujbuc.or.kr', port=80): Max retries exceeded with url: / (Cau"
+  },
+  {
+   "try": "https://www.uijeongbuuc.or.kr",
+   "err": "ConnectionError: HTTPSConnectionPool(host='www.uijeongbuuc.or.kr', port=443): Max retries exceeded with url"
+  },
+  {
+   "try": "https://uijeongbuuc.or.kr",
+   "err": "ConnectionError: HTTPSConnectionPool(host='uijeongbuuc.or.kr', port=443): Max retries exceeded with url: / "
+  },
+  {
+   "try": "http://www.uijeongbuuc.or.kr",
+   "err": "ConnectionError: HTTPConnectionPool(host='www.uijeongbuuc.or.kr', port=80): Max retries exceeded with url: "
+  },
+  {
+   "try": "https://www.ucmc.or.kr",
+   "err": "ConnectionError: HTTPSConnectionPool(host='www.ucmc.or.kr', port=443): Max retries exceeded with url: / (Ca"
+  },
+  {
+   "try": "https://ucmc.or.kr",
+   "err": "ConnectionError: HTTPSConnectionPool(host='ucmc.or.kr', port=443): Max retries exceeded with url: / (Caused"
+  },
+  {
+   "try": "http://www.ucmc.or.kr",
+   "err": "ConnectionError: HTTPConnectionPool(host='www.ucmc.or.kr', port=80): Max retries exceeded with url: / (Caus"
+  },
+  {
+   "try": "https://www.uuco.or.kr",
+   "err": "ConnectionError: HTTPSConnectionPool(host='www.uuco.or.kr', port=443): Max retries exceeded with url: / (Ca"
+  },
+  {
+   "try": "https://uuco.or.kr",
+   "err": "ConnectionError: HTTPSConnectionPool(host='uuco.or.kr', port=443): Max retries exceeded with url: / (Caused"
+  },
+  {
+   "try": "http://www.uuco.or.kr",
+   "err": "ConnectionError: HTTPConnectionPool(host='www.uuco.or.kr', port=80): Max retries exceeded with url: / (Caus"
+  }
+ ],
+ "파주도시공사": [
+  {
+   "try": "https://www.pjuc.or.kr",
+   "err": "ConnectionError: HTTPSConnectionPool(host='www.pjuc.or.kr', port=443): Max retries exceeded with url: / (Ca"
+  },
+  {
+   "try": "https://pjuc.or.kr",
+   "err": "ConnectionError: HTTPSConnectionPool(host='pjuc.or.kr', port=443): Max retries exceeded with url: / (Caused"
+  },
+  {
+   "try": "http://www.pjuc.or.kr",
+   "err": "ConnectionError: HTTPConnectionPool(host='www.pjuc.or.kr', port=80): Max retries exceeded with url: / (Caus"
+  },
+  {
+   "try": "https://www.pajuuc.or.kr",
+   "status": 200,
+   "url": "https://www.pajuuc.or.kr/",
+   "title": "파주도시공사",
+   "bytes": 7683,
+   "links": [
+    [
+     "채용공고 서비스 바로가기",
+     "https://www.pajuuc.or.kr/board/news/recruit.do"
+    ]
+   ]
+  },
+  {
+   "try": "https://www.pjcmc.or.kr",
+   "err": "ConnectionError: HTTPSConnectionPool(host='www.pjcmc.or.kr', port=443): Max retries exceeded with url: / (C"
+  },
+  {
+   "try": "https://pjcmc.or.kr",
+   "err": "ConnectionError: HTTPSConnectionPool(host='pjcmc.or.kr', port=443): Max retries exceeded with url: / (Cause"
+  },
+  {
+   "try": "http://www.pjcmc.or.kr",
+   "err": "ConnectionError: HTTPConnectionPool(host='www.pjcmc.or.kr', port=80): Max retries exceeded with url: / (Cau"
+  }
+ ],
+ "평택도시공사": [
+  {
+   "try": "https://www.puc.or.kr",
+   "err": "ConnectTimeout: HTTPSConnectionPool(host='www.puc.or.kr', port=443): Max retries exceeded with url: / (Cau"
+  },
+  {
+   "try": "https://puc.or.kr",
+   "err": "ConnectTimeout: HTTPSConnectionPool(host='puc.or.kr', port=443): Max retries exceeded with url: / (Caused "
+  },
+  {
+   "try": "http://www.puc.or.kr",
+   "err": "ConnectTimeout: HTTPConnectionPool(host='www.puc.or.kr', port=80): Max retries exceeded with url: / (Cause"
+  }
+ ],
+ "포천도시공사": [
+  {
+   "try": "https://www.pcuc.or.kr",
+   "err": "ConnectionError: HTTPSConnectionPool(host='www.pcuc.or.kr', port=443): Max retries exceeded with url: / (Ca"
+  },
+  {
+   "try": "https://pcuc.or.kr",
+   "err": "ConnectionError: HTTPSConnectionPool(host='pcuc.or.kr', port=443): Max retries exceeded with url: / (Caused"
+  },
+  {
+   "try": "http://www.pcuc.or.kr",
+   "err": "ConnectionError: HTTPConnectionPool(host='www.pcuc.or.kr', port=80): Max retries exceeded with url: / (Caus"
+  },
+  {
+   "try": "https://www.pocheonuc.or.kr",
+   "err": "ConnectionError: HTTPSConnectionPool(host='www.pocheonuc.or.kr', port=443): Max retries exceeded with url: "
+  },
+  {
+   "try": "https://pocheonuc.or.kr",
+   "err": "ConnectionError: HTTPSConnectionPool(host='pocheonuc.or.kr', port=443): Max retries exceeded with url: / (C"
+  },
+  {
+   "try": "http://www.pocheonuc.or.kr",
+   "err": "ConnectionError: HTTPConnectionPool(host='www.pocheonuc.or.kr', port=80): Max retries exceeded with url: / "
+  },
+  {
+   "try": "https://www.pochunuc.or.kr",
+   "err": "ConnectionError: HTTPSConnectionPool(host='www.pochunuc.or.kr', port=443): Max retries exceeded with url: /"
+  },
+  {
+   "try": "https://pochunuc.or.kr",
+   "err": "ConnectionError: HTTPSConnectionPool(host='pochunuc.or.kr', port=443): Max retries exceeded with url: / (Ca"
+  },
+  {
+   "try": "http://www.pochunuc.or.kr",
+   "err": "ConnectionError: HTTPConnectionPool(host='www.pochunuc.or.kr', port=80): Max retries exceeded with url: / ("
+  }
+ ],
+ "하남도시공사": [
+  {
+   "try": "https://www.huic.co.kr",
+   "status": 200,
+   "url": "https://www.huic.co.kr/",
+   "title": "",
+   "bytes": 119,
+   "links": []
+  },
+  {
+   "try": "https://www.hnuc.or.kr",
+   "err": "ConnectionError: HTTPSConnectionPool(host='www.hnuc.or.kr', port=443): Max retries exceeded with url: / (Ca"
+  },
+  {
+   "try": "https://hnuc.or.kr",
+   "err": "ConnectionError: HTTPSConnectionPool(host='hnuc.or.kr', port=443): Max retries exceeded with url: / (Caused"
+  },
+  {
+   "try": "http://www.hnuc.or.kr",
+   "err": "ConnectionError: HTTPConnectionPool(host='www.hnuc.or.kr', port=80): Max retries exceeded with url: / (Caus"
+  }
+ ],
+ "화성도시공사": [
+  {
+   "try": "https://www.hsuco.or.kr",
+   "err": "ConnectionError: HTTPSConnectionPool(host='www.hsuco.or.kr', port=443): Max retries exceeded with url: / (C"
+  },
+  {
+   "try": "https://hsuco.or.kr",
+   "err": "ConnectionError: HTTPSConnectionPool(host='hsuco.or.kr', port=443): Max retries exceeded with url: / (Cause"
+  },
+  {
+   "try": "http://www.hsuco.or.kr",
+   "err": "ConnectionError: HTTPConnectionPool(host='www.hsuco.or.kr', port=80): Max retries exceeded with url: / (Cau"
+  },
+  {
+   "try": "https://www.hsuc.or.kr",
+   "err": "ConnectionError: HTTPSConnectionPool(host='www.hsuc.or.kr', port=443): Max retries exceeded with url: / (Ca"
+  },
+  {
+   "try": "https://hsuc.or.kr",
+   "err": "ConnectionError: HTTPSConnectionPool(host='hsuc.or.kr', port=443): Max retries exceeded with url: / (Caused"
+  },
+  {
+   "try": "http://www.hsuc.or.kr",
+   "err": "ConnectionError: HTTPConnectionPool(host='www.hsuc.or.kr', port=80): Max retries exceeded with url: / (Caus"
+  },
+  {
+   "try": "https://www.hsucorp.or.kr",
+   "err": "ConnectionError: HTTPSConnectionPool(host='www.hsucorp.or.kr', port=443): Max retries exceeded with url: / "
+  },
+  {
+   "try": "https://hsucorp.or.kr",
+   "err": "ConnectionError: HTTPSConnectionPool(host='hsucorp.or.kr', port=443): Max retries exceeded with url: / (Cau"
+  },
+  {
+   "try": "http://www.hsucorp.or.kr",
+   "err": "ConnectionError: HTTPConnectionPool(host='www.hsucorp.or.kr', port=80): Max retries exceeded with url: / (C"
+  }
+ ],
+ "고양도시관리공사": [
+  {
+   "try": "https://www.gys.or.kr",
+   "status": 200,
+   "url": "https://www.gys.or.kr/",
+   "title": "고양도시관리공사",
+   "bytes": 75575,
+   "links": [
+    [
+     "주요사업",
+     "https://www.gys.or.kr/subpage/index/175"
+    ],
+    [
+     "고양창릉 공공주택지구 조성사업",
+     "https://www.gys.or.kr/subpage/index/370"
+    ],
+    [
+     "고양 성사 도시재생 혁신지구 조성사업",
+     "https://www.gys.or.kr/subpage/index/464"
+    ],
+    [
+     "고양창릉 훼손지복구사업",
+     "https://www.gys.or.kr/subpage/index/469"
+    ],
+    [
+     "화정동~도내동 연결도로 개설사업",
+     "https://www.gys.or.kr/subpage/index/504"
+    ],
+    [
+     "위수탁사업",
+     "https://www.gys.or.kr/subpage/index/176"
+    ],
+    [
+     "종량제봉투 공급센터 신축공사(완료)",
+     "https://www.gys.or.kr/subpage/index/251"
+    ],
+    [
+     "고양시 사회주택 지원사업",
+     "https://www.gys.or.kr/subpage/index/357"
+    ],
+    [
+     "도시재생 뉴딜사업",
+     "https://www.gys.or.kr/subpage/index/358"
+    ],
+    [
+     "태양광발전시설 조성사업",
+     "https://www.gys.or.kr/subpage/index/356"
+    ],
+    [
+     "기타사업",
+     "https://www.gys.or.kr/subpage/index/177"
+    ],
+    [
+     "보상공고",
+     "https://www.gys.or.kr/subpage/index/480"
+    ],
+    [
+     "분양정보",
+     "https://www.gys.or.kr/subpage/index/499"
+    ],
+    [
+     "공지사항",
+     "https://www.gys.or.kr/subpage/index/45"
+    ],
+    [
+     "입찰공고/고시",
+     "https://www.gys.or.kr/subpage/index/46"
+    ],
+    [
+     "채용공고",
+     "https://www.gys.or.kr/subpage/index/372"
+    ],
+    [
+     "사업계획",
+     "https://www.gys.or.kr/subpage/index/79"
+    ],
+    [
+     "입찰공고",
+     "https://www.g2b.go.kr/link/FIUA006_01/single/?untySrchSeCd=BK+BUK&rowCnt=&instCd=B552741&demaInstNm=&hghrkInstCd=&prcmBsneAreaCd=%EC%A0%84%EC%B2%B4+%EC%A1%B0070001+%EC%A1%B0070002+%EC%A1%B0070003+%EC%A1%B0070004+%EC%A1%B0070005&prcmMthoSeCd=&frcpYn=N&laseYn=N&rsrvYn=N&chkInstCd=&urlSrchSeCd=instCd&demaInstCd=IN0100000025561&prcmMaagSeCd="
+    ],
+    [
+     "정보화사업 추진현황",
+     "https://www.gys.or.kr/subpage/index/380"
+    ],
+    [
+     "개인정보공지",
+     "https://www.gys.or.kr/subpage/index/316"
+    ]
+   ]
+  },
+  {
+   "try": "https://www.goyangcmc.or.kr",
+   "err": "ConnectionError: HTTPSConnectionPool(host='www.goyangcmc.or.kr', port=443): Max retries exceeded with url: "
+  },
+  {
+   "try": "https://goyangcmc.or.kr",
+   "err": "ConnectionError: HTTPSConnectionPool(host='goyangcmc.or.kr', port=443): Max retries exceeded with url: / (C"
+  },
+  {
+   "try": "http://www.goyangcmc.or.kr",
+   "err": "ConnectionError: HTTPConnectionPool(host='www.goyangcmc.or.kr', port=80): Max retries exceeded with url: / "
+  }
+ ],
+ "국가철도공단": [
+  {
+   "try": "https://www.kr.or.kr",
+   "status": 200,
+   "url": "https://www.kr.or.kr/main.do",
+   "title": "국가철도공단",
+   "bytes": 42462,
+   "links": [
+    [
+     "조달공고",
+     "https://www.kr.or.kr/sub/info.do?m=040203"
+    ],
+    [
+     "해외사업 협업 플랫폼",
+     "https://www.kr.or.kr/sub/info.do?m=040707"
+    ],
+    [
+     "토지보상",
+     "https://land.kr.or.kr/"
+    ],
+    [
+     "사업실명제",
+     "https://www.kr.or.kr/sub/info.do?m=042001"
+    ],
+    [
+     "사업소개",
+     "https://www.kr.or.kr/sub/info.do?m=05010101"
+    ],
+    [
+     "사업품질관리",
+     "https://www.kr.or.kr/sub/info.do?m=05050101"
+    ],
+    [
+     "해외사업",
+     "https://www.kr.or.kr/sub/info.do?m=050601"
+    ],
+    [
+     "설계공모 작품집",
+     "https://www.kr.or.kr/sub/info.do?m=0814"
+    ],
+    [
+     "주요사업계획",
+     "https://www.kr.or.kr/preopen/view.do?seq=100173"
+    ],
+    [
+     "공지 2026년 하반기 역명부기 사용기관 모집공고",
+     "https://www.kr.or.kr/boardCnts/view.do?boardID=51&boardSeq=1122804"
+    ],
+    [
+     "해외사업",
+     "javascript:popupBrochure('global.html'         )"
+    ],
+    [
+     "한국토지주택공사",
+     "https://www.lh.or.kr/"
+    ]
+   ]
+  }
+ ],
+ "한국철도공사(코레일)": [
+  {
+   "try": "https://www.info.korail.com",
+   "err": "ConnectionError: HTTPSConnectionPool(host='www.info.korail.com', port=443): Max retries exceeded with url: "
+  },
+  {
+   "try": "https://info.korail.com",
+   "status": 200,
+   "url": "https://info.korail.com/",
+   "title": "",
+   "bytes": 96,
+   "links": []
+  },
+  {
+   "try": "https://www.korail.com",
+   "status": 200,
+   "url": "https://www.korail.com/",
+   "title": "코레일 승차권예매",
+   "bytes": 7656,
+   "links": []
+  }
+ ],
+ "한국자산관리공사(캠코)": [
+  {
+   "try": "https://www.kamco.or.kr",
+   "status": 200,
+   "url": "https://www.kamco.or.kr/main.do",
+   "title": "한국자산관리공사",
+   "bytes": 257721,
+   "links": [
+    [
+     "채용공고",
+     "https://www.kamco.or.kr/portal/contents.do?mId=0105040000"
+    ],
+    [
+     "가계안정지원사업",
+     "https://www.kamco.or.kr/portal/contents.do?mId=0202000000"
+    ],
+    [
+     "가계안정지원사업 개요",
+     "https://www.kamco.or.kr/portal/contents.do?mId=0202010000"
+    ],
+    [
+     "가계안정지원사업 내용",
+     "https://www.kamco.or.kr/portal/contents.do?mId=0202020000"
+    ],
+    [
+     "자산매입 후 임대(사업재편기업)",
+     "https://www.kamco.or.kr/portal/contents.do?mId=0304120000"
+    ],
+    [
+     "PF사업장 정상화 지원펀드",
+     "https://www.kamco.or.kr/portal/contents.do?mId=0306070000"
+    ],
+    [
+     "글로벌 협력·투자사업",
+     "https://www.kamco.or.kr/portal/contents.do?mId=0305010000"
+    ],
+    [
+     "공공사업",
+     "https://www.kamco.or.kr/portal/contents.do?mId=0400000000"
+    ],
+    [
+     "공지사항",
+     "https://www.kamco.or.kr/portal/contents.do?mId=0406050000"
+    ],
+    [
+     "희망리플레이사업",
+     "https://www.kamco.or.kr/portal/contents.do?mId=0607010000"
+    ],
+    [
+     "동반성장 사업소개",
+     "https://www.kamco.or.kr/portal/contents.do?mId=0613030000"
+    ],
+    [
+     "공지사항",
+     "https://www.kamco.or.kr/portal/contents.do?mId=0701010000"
+    ],
+    [
+     "주요 입찰공고",
+     "https://www.kamco.or.kr/portal/contents.do?mId=0701020000"
+    ],
+    [
+     "2026년 제10차 국유농지 대부종료 공고",
+     "https://www.kamco.or.kr/portal/bbs/view.do?mId=0701010000&ptIdx=380&bIdx=29045"
+    ],
+    [
+     "기업지원펀드 투자 관련 법률자문 용역 입찰공고",
+     "https://www.kamco.or.kr/portal/bbs/view.do?mId=0701020000&ptIdx=480&bIdx=28987"
+    ],
+    [
+     "기업지원펀드 투자타당성 검토 용역 입찰공고",
+     "https://www.kamco.or.kr/portal/bbs/view.do?mId=0701020000&ptIdx=480&bIdx=28986"
+    ],
+    [
+     "종합신용지원",
+     "http://www.badbank.or.kr/"
+    ]
+   ]
+  }
+ ],
+ "한국수자원공사": [
+  {
+   "try": "https://www.kwater.or.kr",
+   "status": 200,
+   "url": "https://www.kwater.or.kr/",
+   "title": "",
+   "bytes": 196,
+   "links": []
+  }
+ ],
+ "한국도로공사": [
+  {
+   "try": "https://www.ex.co.kr",
+   "err": "ConnectTimeout: HTTPSConnectionPool(host='www.ex.co.kr', port=443): Max retries exceeded with url: / (Caus"
+  },
+  {
+   "try": "https://ex.co.kr",
+   "err": "ConnectTimeout: HTTPSConnectionPool(host='ex.co.kr', port=443): Max retries exceeded with url: / (Caused b"
+  },
+  {
+   "try": "http://www.ex.co.kr",
+   "err": "ConnectTimeout: HTTPConnectionPool(host='www.ex.co.kr', port=80): Max retries exceeded with url: / (Caused"
+  }
+ ]
+}
