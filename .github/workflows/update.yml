@@ -40,6 +40,12 @@ jobs:
       - name: 테스트
         run: python -m pytest tests -q
 
+      - name: 브라우저 설치 (자바스크립트로 그려지는 게시판용)
+        if: github.event_name != 'push'
+        run: |
+          pip install playwright
+          python -m playwright install --with-deps chromium
+
       - name: 수집
         if: github.event_name != 'push'
         env:
