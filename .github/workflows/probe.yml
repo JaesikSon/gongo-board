@@ -14,58 +14,73 @@ jobs:
       - name: probe
         run: |
           cat > /tmp/p.py <<'PY'
-          import json, re, requests, urllib3
+          import json, re, requests, urllib3, time
           from bs4 import BeautifulSoup
-          from urllib.parse import urljoin
+          from urllib.parse import urljoin, urlparse
           urllib3.disable_warnings()
-          C = {
-           "서울주택도시개발공사(SH)": ["i-sh.co.kr"],
-           "과천도시공사": ["gcuc.or.kr"], "광명도시공사": ["gmuc.co.kr", "gmuc.or.kr"],
-           "광주도시관리공사": ["gjuc.or.kr", "gjcmc.or.kr", "gjuc.co.kr"],
-           "구리도시공사": ["guriuc.or.kr", "guric.or.kr"], "군포도시공사": ["gunpouc.or.kr"],
-           "김포도시공사": ["guc.or.kr"], "남양주도시공사": ["ncuc.or.kr"], "부천도시공사": ["best.or.kr"],
-           "성남도시개발공사": ["isdc.co.kr"], "수원도시공사": ["suwonudc.co.kr"], "시흥도시공사": ["shsi.or.kr"],
-           "안산도시공사": ["ansanuc.net"], "안양도시공사": ["auc.or.kr"],
-           "양주도시공사": ["yjuc.or.kr", "yangjuuc.or.kr", "yjcmc.or.kr"],
-           "여주도시공사": ["yeojuuc.or.kr", "yjmc.or.kr", "yjcmc.or.kr", "yeoju-uc.or.kr"],
-           "용인도시공사": ["yuc.co.kr"], "의왕도시공사": ["uuc.or.kr"],
-           "의정부도시공사": ["ujbuc.or.kr", "uijeongbuuc.or.kr", "ucmc.or.kr", "uuco.or.kr"],
-           "파주도시공사": ["pjuc.or.kr", "pajuuc.or.kr", "pjcmc.or.kr"], "평택도시공사": ["puc.or.kr"],
-           "포천도시공사": ["pcuc.or.kr", "pocheonuc.or.kr", "pochunuc.or.kr"],
-           "하남도시공사": ["huic.co.kr", "hnuc.or.kr"], "화성도시공사": ["hsuco.or.kr", "hsuc.or.kr", "hsucorp.or.kr"],
-           "고양도시관리공사": ["gys.or.kr", "goyangcmc.or.kr"],
-           "국가철도공단": ["kr.or.kr"], "한국철도공사(코레일)": ["info.korail.com", "korail.com"],
-           "한국자산관리공사(캠코)": ["kamco.or.kr"], "한국수자원공사": ["kwater.or.kr"], "한국도로공사": ["ex.co.kr"],
+          S = {
+           "서울주택도시개발공사(SH)": "https://www.i-sh.co.kr", "과천도시공사": "https://www.gcuc.or.kr/fmcs/1",
+           "광명도시공사": "https://www.gmuc.co.kr", "군포도시공사": "https://www.gunpouc.or.kr/fmcs/1",
+           "김포도시공사": "https://www.guc.or.kr", "남양주도시공사": "https://www.ncuc.or.kr", "부천도시공사": "https://www.best.or.kr/fmcs/1",
+           "성남도시개발공사": "https://www.isdc.co.kr", "수원도시공사": "https://www.suwonudc.co.kr", "시흥도시공사": "https://www.shsi.or.kr",
+           "안산도시공사": "https://www.ansanuc.net", "안양도시공사": "http://www.auc.or.kr", "양주도시공사": "https://www.yjuc.or.kr",
+           "여주도시공사": "https://yeojuuc.or.kr", "의왕도시공사": "https://www.uuc.or.kr", "파주도시공사": "https://www.pajuuc.or.kr",
+           "하남도시공사": "https://www.huic.co.kr", "고양도시관리공사": "https://www.gys.or.kr", "국가철도공단": "https://www.kr.or.kr/main.do",
+           "한국철도공사(코레일)": "https://info.korail.com", "한국자산관리공사(캠코)": "https://www.kamco.or.kr/main.do",
+           "한국수자원공사": "https://www.kwater.or.kr", "경기주택도시공사(GH)": "https://www.gh.or.kr", "인천도시공사(iH)": "https://www.ih.co.kr",
           }
-          KW = re.compile(r"공고|공지|분양|매각|사업|공모|입찰|토지|용지|공급")
+          MENU = re.compile(r"공지|공고|분양|매각|사업|공모|사이트맵|알림|소식|고시|토지|용지|공급|부동산|자산|개발|역세권|게시판|보도|입찰|SITEMAP|sitemap", re.I)
+          SKIP = re.compile(r"채용|인권|윤리|청렴|민원|칭찬|예약|대관|수강|강좌|프로그램|주차|체육|스포츠|수영|헬스|문화|축제|영상|사진|갤러리|로그인|회원|English|ENG|개인정보|약관|오시는|조직|CEO|인사말|연혁")
+          DATE = re.compile(r"20\d\d[.\-/]\s?\d{1,2}[.\-/]\s?\d{1,2}")
           H = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124 Safari/537.36", "Accept-Language": "ko-KR,ko"}
+          def get(u):
+              r = requests.get(u, headers=H, timeout=20, verify=False)
+              if not r.encoding or r.encoding.lower() == "iso-8859-1": r.encoding = r.apparent_encoding
+              return r
           out = {}
-          for name, doms in C.items():
-              res = []
-              for d in doms:
-                  for base in (f"https://www.{d}", f"https://{d}", f"http://www.{d}"):
-                      try:
-                          r = requests.get(base, headers=H, timeout=20, verify=False)
-                          r.encoding = r.apparent_encoding if not r.encoding or r.encoding.lower() == "iso-8859-1" else r.encoding
-                          s = BeautifulSoup(r.text, "html.parser")
-                          links = []
-                          for a in s.find_all("a"):
-                              t = " ".join(a.get_text(" ", strip=True).split())
-                              h = a.get("href") or ""
-                              if t and KW.search(t) and len(t) < 30 and h and not h.startswith(("javascript:void", "#")):
-                                  links.append([t, urljoin(r.url, h)])
-                          seen = set(); links = [l for l in links if not (l[1] in seen or seen.add(l[1]))][:40]
-                          res.append({"try": base, "status": r.status_code, "url": r.url, "title": (s.title.get_text(strip=True) if s.title else "")[:80], "bytes": len(r.text), "links": links})
-                          break
-                      except Exception as e:
-                          res.append({"try": base, "err": f"{type(e).__name__}: {str(e)[:90]}"})
-              out[name] = res
-          json.dump(out, open("probe.json", "w"), ensure_ascii=False, indent=1)
+          for name, start in S.items():
+              host = urlparse(start).netloc.replace("www.", "")
+              seen, queue, boards, err = set(), [(start, "홈", 0)], [], ""
+              t0 = time.time()
+              while queue and len(seen) < 45 and time.time() - t0 < 100:
+                  u, label, depth = queue.pop(0)
+                  key = u.split("#")[0]
+                  if key in seen: continue
+                  seen.add(key)
+                  try:
+                      r = get(u)
+                  except Exception as e:
+                      if depth == 0: err = f"{type(e).__name__}: {str(e)[:80]}"
+                      continue
+                  s = BeautifulSoup(r.text, "html.parser")
+                  txt = s.get_text(" ", strip=True)
+                  nd = len(DATE.findall(txt))
+                  if depth > 0 and nd >= 5:
+                      rows = []
+                      for a in s.find_all("a"):
+                          t = " ".join(a.get_text(" ", strip=True).split())
+                          if 8 <= len(t) <= 90:
+                              par = a.find_parent(["tr", "li", "dl"])
+                              if par and DATE.search(par.get_text(" ", strip=True)): rows.append(t)
+                      if len(rows) >= 3:
+                          boards.append({"label": label, "url": r.url, "dates": nd, "rows": len(rows), "sample": rows[:6]})
+                  if depth < 2:
+                      for a in s.find_all("a"):
+                          t = " ".join(a.get_text(" ", strip=True).split()); h = a.get("href") or ""
+                          if not t or len(t) > 25 or not MENU.search(t) or SKIP.search(t): continue
+                          if h.startswith(("javascript", "#", "mailto", "tel")): continue
+                          v = urljoin(r.url, h)
+                          if host not in urlparse(v).netloc: continue
+                          if re.search(r"\.(pdf|hwp|hwpx|zip|jpg|png|xlsx?)$", v, re.I): continue
+                          queue.append((v, f"{label}>{t}" if depth else t, depth + 1))
+              out[name] = {"start": start, "err": err, "pages": len(seen), "boards": boards}
+          json.dump(out, open("probe2.json", "w"), ensure_ascii=False, indent=1)
+
           PY
           python /tmp/p.py
       - name: save
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          mkdir -p probe && mv probe.json probe/probe.json
-          git add probe/probe.json && git commit -m "probe" && git pull --rebase -X theirs origin main && git push origin HEAD:main
+          mkdir -p probe && mv probe2.json probe/probe2.json
+          git add probe/probe2.json && git commit -m "probe2" && git pull --rebase -X theirs origin main && git push origin HEAD:main
