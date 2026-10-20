@@ -18,7 +18,7 @@ from urllib.parse import urljoin, urlparse
 import yaml
 from bs4 import BeautifulSoup
 
-from common import LAND_ONLY, dev_category, org_type, zone_of, env, find_dates, http_get, is_land_title, now_kst, sido_of
+from common import LAND_ONLY, dev_category, org_type, zone_of, env, find_dates, http_get, is_land_title, is_ppp_title, now_kst, sido_of
 
 SALE_RX = re.compile(r"매각|공매|분양|수의계약|용지|택지|토지\s*공급|부지|필지|체비지|보류지|상가\s*공급|잔여\s*(토지|용지|필지|상가)")
 EXCLUDE_RX = re.compile(
@@ -55,8 +55,46 @@ def _soup(url: str) -> BeautifulSoup:
     return BeautifulSoup(r.text, "html.parser")
 
 
-def discover_boards(homepage: str, limit: int) -> list[str]:
-    soup = _soup(homepage)
+# ── 자바스크립트로 그려지는 사이트용: 실제 브라우저(Playwright)로 화면을 그린 뒤 읽기 ──────────
+RENDER = env("BOARD_RENDER", "true").lower() not in ("0", "false", "n", "no")
+_PW: dict = {}
+
+
+def _render(url: str, wait_ms: int = 2500) -> BeautifulSoup:
+    if "page" not in _PW:
+        from playwright.sync_api import sync_playwright
+        _PW["pw"] = sync_playwright().start()
+        _PW["browser"] = _PW["pw"].chromium.launch()
+        _PW["page"] = _PW["browser"].new_page(locale="ko-KR", ignore_https_errors=True, user_agent=(
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36"))
+    pg = _PW["page"]
+    pg.goto(url, timeout=30000, wait_until="domcontentloaded")
+    pg.wait_for_timeout(wait_ms)
+    return BeautifulSoup(pg.content(), "html.parser")
+
+
+def close_render() -> None:
+    try:
+        if "browser" in _PW:
+            _PW["browser"].close()
+            _PW["pw"].stop()
+    except Exception:  # noqa: BLE001
+        pass
+    _PW.clear()
+
+
+def _render_available() -> bool:
+    if not RENDER:
+        return False
+    try:
+        import playwright  # noqa: F401
+        return True
+    except ImportError:
+        return False
+
+
+def discover_boards(homepage: str, limit: int, fetch=None) -> list[str]:
+    soup = (fetch or _soup)(homepage)
     found = []
     for a in soup.find_all("a"):
         text = " ".join(a.get_text(" ", strip=True).split())
@@ -74,7 +112,7 @@ def extract_notices(board_url: str, soup: BeautifulSoup, src: dict, since: str) 
     out = []
     for a in soup.find_all("a"):
         title = " ".join(a.get_text(" ", strip=True).split())
-        if len(title) < 6 or not SALE_RX.search(title) or FILE_RX.search(title):
+        if len(title) < 6 or not (SALE_RX.search(title) or is_ppp_title(title)) or FILE_RX.search(title):
             continue  # 첨부파일 이름은 공고가 아님
         if LAND_ONLY and not is_land_title(title):
             continue
@@ -150,22 +188,48 @@ def load_sources(path: Path) -> list[dict]:
     return [s for s in data.get("sources", []) if s.get("enabled", True)]
 
 
+def _read_boards(boards: list[str], src: dict, since: str, fetch, recs: list, seen: set, errs: list) -> None:
+    for b in boards:
+        try:
+            for n in extract_notices(b, fetch(b), src, since):
+                if n["id"] not in seen:
+                    seen.add(n["id"])
+                    recs.append(n)
+        except Exception as e:  # noqa: BLE001
+            errs.append(f"{b}: {type(e).__name__}")
+
+
 def collect_one(src: dict, since: str, limit: int) -> tuple[list[dict], dict]:
     boards = src.get("boards") or []
     msg_prefix = ""
     try:
-        if not boards and src.get("homepage"):
-            boards = discover_boards(src["homepage"], limit)
-            msg_prefix = f"게시판 {len(boards)}개 자동탐색 · "
         recs, seen, errs = [], set(), []
-        for b in boards:
+        static_ok = not src.get("render")
+        if static_ok:
             try:
-                for n in extract_notices(b, _soup(b), src, since):
-                    if n["id"] not in seen:
-                        seen.add(n["id"])
-                        recs.append(n)
+                if not boards and src.get("homepage"):
+                    boards = discover_boards(src["homepage"], limit)
+                    msg_prefix = f"게시판 {len(boards)}개 자동탐색 · "
+                _read_boards(boards, src, since, _soup, recs, seen, errs)
             except Exception as e:  # noqa: BLE001
-                errs.append(f"{b}: {type(e).__name__}")
+                errs.append(f"{type(e).__name__}: {str(e)[:80]}")
+        # 일반 방식으로 하나도 못 읽었으면 실제 브라우저로 화면을 그려서 다시 시도
+        if not recs and _render_available():
+            try:
+                rboards = src.get("boards") or (discover_boards(src["homepage"], limit, _render) if src.get("homepage") else [])
+                rerrs: list = []
+                _read_boards(rboards, src, since, _render, recs, seen, rerrs)
+                if rboards:
+                    boards = rboards
+                    msg_prefix = ("" if src.get("boards") else f"게시판 {len(rboards)}개 자동탐색 · ") + "브라우저 렌더링 · "
+                    if recs:
+                        errs = rerrs
+                    else:
+                        errs += rerrs
+            except Exception as e:  # noqa: BLE001
+                errs.append(f"렌더링 {type(e).__name__}: {str(e)[:80]}")
+        if not boards and errs:
+            raise RuntimeError(errs[0])
         n_body = classify_by_body(recs, boards)
         msg = msg_prefix + f"공고 {len(recs)}건"
         if n_body:
@@ -188,9 +252,12 @@ def collect(sources_path: Path, log=print) -> dict:
     since = (now_kst() - timedelta(days=int(env("BOARD_LOOKBACK_DAYS", "120")))).strftime("%Y-%m-%d")
     limit = int(env("BOARD_DISCOVER_LIMIT", "6"))
     records, statuses = [], []
-    for src in load_sources(sources_path):
-        recs, st = collect_one(src, since, limit)
-        log(f"  {src['name']}: {st['message']}")
-        records.extend(recs)
-        statuses.append(st)
+    try:
+        for src in load_sources(sources_path):
+            recs, st = collect_one(src, since, limit)
+            log(f"  {src['name']}: {st['message']}")
+            records.extend(recs)
+            statuses.append(st)
+    finally:
+        close_render()
     return {"records": records, "statuses": statuses}
