@@ -495,3 +495,26 @@ def test_ai_summary_reads_zip_and_skips_broken_file(monkeypatch, tmp_path):
     seen.clear()
     A.enrich(items, "x", log=lambda *_: None, fetch=files.__getitem__, caller=caller)
     assert not seen  # 다시 하지 않음
+
+
+def test_ppp_development_competitions_are_collected():
+    from common import dev_category, is_land_title, is_ppp_title
+    yes = ["의왕시 오전역세권 복합개발사업 민간참여자 재공모 공고",
+           "경의선 DMC역 복합개발사업 민간사업자 공모",
+           "의왕시 오전역세권 복합개발사업 민간참여자 공모 공고",
+           "○○역세권 개발사업 공모 공고",
+           "경의중앙선 디지털미디어시티(DMC)역 복합개발사업 사업주관자 공모"]
+    no = ["의왕시 오전역세권 복합개발사업 민간참여자 선정심의위원(후보자) 모집 공고",
+          "오전역세권 복합개발사업 민간참여자 공모 질의회신 일정변경 알림",
+          "민간참여자 공모 공모지침서 배부 및 공지 알림 설명회",
+          "우선협상대상자 선정 결과 공고",
+          "2026년 도시재생 아이디어 공모전", "공사 CI 디자인 공모"]
+    for t in yes:
+        assert is_ppp_title(t) and dev_category(t) == "민관합동 공모" and is_land_title(t), t
+    for t in no:
+        assert not is_ppp_title(t), t
+    soup = BeautifulSoup('<table><tr><td><a href="/read?no=1">의왕시 오전역세권 복합개발사업 민간참여자 재공모 공고</a></td>'
+                         '<td>2026.10.06</td></tr></table>', "html.parser")
+    recs = boards.extract_notices("https://www.uuc.or.kr/base/board/list", soup,
+                                  {"name": "의왕도시공사", "sido": "경기"}, "2026-06-01")
+    assert len(recs) == 1 and recs[0]["cat"] == "민관합동 공모" and recs[0]["posted"] == "2026-10-06"
