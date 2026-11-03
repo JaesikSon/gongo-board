@@ -107,6 +107,10 @@ table.pt td.num{text-align:right}
 .dl button{font:inherit;font-size:13px;padding:5px 12px;border-radius:999px;border:1px solid var(--accent);background:var(--panel);color:var(--accent);cursor:pointer}
 .dl button:hover{background:var(--accent-soft)}
 .dl button:disabled{opacity:.6;cursor:wait}
+.fsb{grid-column:1/-1;display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:6px;padding:7px 10px;border:1px solid var(--accent);border-radius:8px;background:var(--accent-soft);font-size:13px}
+.fsb b.go{color:#1a7f37}.fsb b.no{color:#c55a11}
+.fsb .fsdl{margin-left:auto;font:inherit;font-size:13px;padding:4px 12px;border-radius:999px;border:1px solid var(--accent);background:var(--panel);color:var(--accent);font-weight:600;cursor:pointer}
+.fsb .fsdl:disabled{opacity:.6;cursor:wait}
 .hint{font-size:12.5px;color:var(--muted);margin-top:6px}
 footer{color:var(--muted);font-size:12.5px;margin-top:18px;line-height:1.6}
 @media (max-width:760px){
@@ -184,7 +188,7 @@ footer{color:var(--muted);font-size:12.5px;margin-top:18px;line-height:1.6}
 <script>
 const $ = s => document.querySelector(s);
 const PAGE = 60;
-let DATA = {items:[], statuses:[]}, ARCH = null, tab = 'all', shown = PAGE;
+let DATA = {items:[], statuses:[]}, ARCH = null, tab = 'all', shown = PAGE, FS = {};
 const isArch = () => tab === 'arch';
 
 const won = v => {
@@ -336,6 +340,11 @@ function sumPanel(r){
     <div class="hint">LH 상세페이지·첨부 필지목록에서 자동 추출했습니다. 입찰·청약 전 반드시 원문 공고를 확인하세요.</div></details>`;
 }
 
+function fsBlock(r){
+  let f = FS[r.id]; if (typeof f === 'string') f = FS[f]; if (!f) return '';
+  const go = f.verdict === 'Go';
+  return `<div class="fsb"><span>사업성 분석 <span class="small">(${esc(f.date)})</span></span><b class="${go?'go':'no'}">${esc(f.verdict)}</b><span>${esc(f.line || '')}</span><button type="button" class="fsdl" data-dl="fs" data-id="${esc(r.id)}">F/S 엑셀 다운로드</button></div>`;
+}
 function card(r){
   const arch = isArch();
   const meta = [
@@ -368,6 +377,7 @@ function card(r){
     <div><a class="t" href="${esc(r.url)}" target="_blank" rel="noopener">${esc(r.title)}</a>
       <div class="meta">${meta}</div><div class="chips">${chipsOf(r, arch)}</div></div>
     <div class="right">${right}</div>
+    ${fsBlock(r)}
     ${r.sum ? sumPanel(r) : ''}
   </article>`;
 }
@@ -409,6 +419,8 @@ async function loadArchive(){
 }
 
 async function load(){
+  try { FS = await fetch('data/fs/index.json?t=' + Date.now()).then(r => r.ok ? r.json() : {}); } catch(e) { FS = {}; }
+  window.FS = FS;
   try { DATA = await fetch('data/notices.json?t=' + Date.now()).then(r => r.json()); }
   catch(e) { DATA = {items:[], statuses:[]}; }
   const items = DATA.items || (DATA.items = []);
@@ -449,6 +461,7 @@ $('#more').onclick = () => { shown += PAGE; render(); };
 const LIBS = {
   docx: 'https://cdn.jsdelivr.net/npm/docx@8.5.0/build/index.umd.js',
   pptx: 'https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgen.bundle.js',
+  xlsx: 'https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js',
 };
 const libReady = {};
 function loadLib(k){
@@ -504,6 +517,8 @@ const PLOT_HEAD = ['블록·용지', '소재지·지번', '용도지역', '면�
 const BLOCK_FIELDS = [['용도','use'],['허용용도','allowed'],['불허용도','banned'],['건폐율','bcr'],['용적률','far'],['최고층수','floors'],['최고높이','height'],['세대·규모','units']];
 const DISCLAIMER = '이 문서는 LH 상세페이지·첨부 필지목록·지구단위계획을 자동으로 요약한 것으로 오류가 있을 수 있습니다. 입찰·청약 전 반드시 원문 공고를 확인하세요.';
 
+window.fsLoadLib = async () => { await loadLib('xlsx'); return window.ExcelJS; };
+window.fsDownload = (b, n) => download(b, n);
 function download(blob, name){
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob); a.download = name;
@@ -666,6 +681,13 @@ async function exportPptx(r){
 document.getElementById('list').addEventListener('click', async e => {
   const b = e.target.closest('button[data-dl]');
   if (!b) return;
+  if (b.dataset.dl === 'fs') {
+    const label = b.textContent; b.disabled = true; b.textContent = '만드는 중…';
+    try { await window.exportFs(b.dataset.id); }
+    catch (err) { alert('F/S 파일을 만들지 못했습니다: ' + err.message); console.error(err); }
+    finally { b.disabled = false; b.textContent = label; }
+    return;
+  }
   const r = [...DATA.items, ...((ARCH && ARCH.items) || [])].find(x => x.id === b.dataset.id);
   if (!r) return;
   const label = b.textContent; b.disabled = true; b.textContent = '만드는 중…';
@@ -675,5 +697,6 @@ document.getElementById('list').addEventListener('click', async e => {
 });
 load();
 </script>
+<script src="fs.js"></script>
 </body>
 </html>
