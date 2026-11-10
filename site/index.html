@@ -764,8 +764,14 @@ async function exportPptx(r){
   };
 
   // 개발계획 (F/S가 있거나 지구단위계획 AI 요약이 없을 때 — AI 요약만 있으면 블록별 계획지표가 대신함)
+  // 설계개요(설계개요 검토기 엔진): F/S 스펙에 있으면 그 값, 없으면 공동주택 단일 블록 공고만 공고 값으로 산출
+  let dsg = S && S.design ? S.design : null;
+  try { if (!dsg && window.designEngine && r.cat === '공동주택' && ps.length === 1) dsg = window.designEngine.toSpec(window.designEngine.fromNotice(r, {})); } catch (e) { dsg = null; }
+  const n0 = v => Math.round(v).toLocaleString();
+  const dsgRows = dsg ? [['설계개요', [`지상 ${n0(dsg.지상)}㎡ + 지하 ${dsg.지하층}개층 ${n0(dsg.지하)}㎡`, `연면적 ${n0(dsg.연면적 * PY)}평 (지상 대비 ${dsg.배수.toFixed(2)}배)`,
+    `${dsg.동수}개동 최고 ${dsg.최고층}층 · ${n0(dsg.세대)}세대 · 주차 ${n0(dsg.주차)}대`]]] : [];
   const secPlan = (sl, x, y) => {
-    const rows = [['용적률', cut(far, 60)], ['건폐율', cut(bcr, 30)], ['높이·층수', cut(height, 60)], ['세대·규모', cut(units, 60)],
+    const rows = [...dsgRows, ['용적률', cut(far, 60)], ['건폐율', cut(bcr, 30)], ['높이·층수', cut(height, 60)], ['세대·규모', cut(units, 60)],
       ['허용용도', cut(b0.allowed, 66)], ['불허용도', cut(b0.banned, 66)]]
       .concat(R.blocks.length ? [] : [['지구단위계획', hasPlan ? '세부 제한은 첨부 원문 확인' : '첨부 없음 — 공고문 확인']]);
     return kvTable(sl, rows, x, sec(sl, x, y, '개발계획'), WL, 1.2);
@@ -860,7 +866,7 @@ async function exportPptx(r){
   // ── 배치: 순서대로 쌓되, 현재 쪽에 들어가면 이어 붙이고 넘치면 새 쪽 ──
   // pair: 왼쪽·오른쪽 구역을 같은 높이에서 시작 / full: 전체 폭
   const flow = [{ L: secOverview, R: secIssues }, { full: secConclusion }];
-  if (!R.blocks.length || fr) flow.push({ L: secPlan, R: fr ? secFS : null });
+  if (!R.blocks.length || fr || dsg) flow.push({ L: secPlan, R: fr ? secFS : null });
   R.blocks.slice(0, 6).forEach((b, i) => flow.push({ L: secBlockL(b), R: secBlockR(b, i === 0), minR: 2.4, ai: b.pages || '-' }));
   if (ps.length > 1) flow.push({ plots: ps.slice(0, 24) });
   flow.push({ L: secSchedule, R: secFiles, minR: 0.48 + LH * 5 });
@@ -944,6 +950,7 @@ document.getElementById('list').addEventListener('click', async e => {
 });
 load();
 </script>
+<script src="design.js"></script>
 <script src="fs.js"></script>
 </body>
 </html>
