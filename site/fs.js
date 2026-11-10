@@ -199,7 +199,7 @@ function run(a, Lover) {
     rows, 이익, 이익률: 이익 / 매출, 상가제외이익: 이익 - sum('상가'), EqDefault, EqNeed: need, Eq, ROE: 이익 / Eq, BL, PF, minCash, 자금부족, d };
 }
 function solveL(a, target) { // 이익률 target 을 만족하는 최대 토지가 (없으면 null)
-  let lo = 0, hi = a.공급가격 * 5;
+  let lo = 0, hi = Math.max(a.공급가격 * 5, run(a, 0).매출);
   if (run(a, lo).이익률 < target) return null;
   if (run(a, hi).이익률 >= target) return hi;
   for (let i = 0; i < 80; i++) { const m = (lo + hi) / 2; if (run(a, m).이익률 >= target) lo = m; else hi = m; }

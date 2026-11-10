@@ -591,80 +591,276 @@ async function exportDocx(r){
   download(await D.Packer.toBlob(doc), `${safeName(R.title)}_요약.docx`);
 }
 
+// PowerPoint — 그룹 시너지협의체 '프로젝트 요약' 양식(’26.11) 준용. A4 가로, 나눔바른고딕 본문 12pt, 모든 글자 흰색 윤곽선(0.75pt·투명도 90%)
+// 1쪽 개요·주요 이슈 / 2쪽 개발계획·사업수지 / 지구단위계획(블록별) / 공급 필지 / 공급 일정·원문 자료
 async function exportPptx(r){
   await loadLib('pptx');
   const R = reportOf(r), P = new PptxGenJS();
-  // 슬라이드 크기: PowerPoint 'A4 용지(210x297mm)' 프리셋 = 27.52 x 19.05 cm
   P.defineLayout({ name: 'A4', width: 10.83, height: 7.5 }); P.layout = 'A4'; P.title = R.title;
-  const SW = 10.83, M = 0.45, CW = SW - M * 2;
-  const FONT = 'Malgun Gothic', ACC = '1F5F4A', INK = '1D1F22', MUT = '6B6F76', LINE = 'DDDBD4', SOFT = 'F3F2EE';
-  const T = { fontFace: FONT, color: INK };
-  const short = v => String(v || '').split(' (')[0].split(' / ')[0];
-  const header = (sl, title, sub) => {
-    sl.background = { color: 'FFFFFF' };
-    sl.addShape(P.shapes.RECTANGLE, { x: 0, y: 0, w: SW, h: 0.12, fill: { color: ACC }, line: { color: ACC } });
-    sl.addText(title, { ...T, x: M, y: 0.28, w: CW, h: 0.7, fontSize: 20, bold: true, valign: 'top' });
-    if (sub) sl.addText(sub, { ...T, x: M, y: 0.98, w: CW, h: 0.32, fontSize: 10, color: MUT });
-    sl.addText(DISCLAIMER, { ...T, x: M, y: 7.05, w: CW - 1.5, h: 0.3, fontSize: 7, color: MUT });
-    sl.addText(`작성 ${R.made}`, { ...T, x: SW - M - 1.5, y: 7.05, w: 1.5, h: 0.3, fontSize: 7, color: MUT, align: 'right' });
+  const F = '나눔바른고딕', FS = 12, NV = '1F4E79', LB = 'DEEBF7', TAG = 'FFF2CC', INK = '262626', MUT = '7F7F7F', RED = 'C00000';
+  const X0 = 0.18, XR = 5.31, WL = 4.96, WR = 5.36, FW = 10.48, YB = 7.06;   // YB: 본문 하한
+  const T = { fontFace: F, color: INK, fontSize: FS };
+  const SOL = { type: 'solid', pt: 1, color: NV }, THN = { type: 'solid', pt: 0.5, color: 'A6A6A6' }, DSH = { type: 'dash', pt: 0.5, color: 'A6A6A6' };
+  const MG = [0.04, 0.07, 0.04, 0.07];
+  const cut = (s, n) => { s = String(s ?? '').replace(/\s+/g, ' ').trim(); return s.length > n ? s.slice(0, n - 1) + '…' : s; };
+  const ymd = s => /^\d{4}-\d{2}-\d{2}/.test(s || '') ? `’${s.slice(2, 4)}. ${+s.slice(5, 7)}. ${+s.slice(8, 10)}.` : (s || '');
+  const eok = v => { const e = v / 1e5; return Math.abs(e) >= 100 ? Math.round(e).toLocaleString() : e.toFixed(1); };   // 천원 → 억
+  const pct = v => (v * 100).toFixed(1) + '%';
+  const noPage = x => String(x || '').replace(/\s*\(p\.[\d, p.~\-]+\)\s*$/, '');
+  // 표 높이 추정(다음 구역 위치 계산용): 한글 1자 ≈ 글자 크기, 영문·숫자 0.55배, 공백 0.3배
+  const vlen = s => [...String(s)].reduce((a, c) => a + (c === ' ' ? 0.3 : c.charCodeAt(0) > 255 ? 1 : 0.55), 0);
+  const nLines = (s, w) => String(s).split('\n').reduce((a, t) => a + Math.max(1, Math.ceil(vlen(t) / ((w - 0.18) * 72 / FS))), 0);
+  const cutV = (s, n) => { s = String(s ?? '').replace(/\s+/g, ' ').trim(); if (vlen(s) <= n) return s; let o = ''; for (const c of s) { if (vlen(o + c) > n - 1) break; o += c; } return o + '…'; };   // 표시 폭 기준 자르기
+  const rowH = cells => Math.max(...cells.map(([t, w]) => nLines(t, w))) * FS * 1.3 / 72 + 0.1;
+
+  const ps = R.plots, p0 = ps[0] || {}, b0 = R.blocks[0] || {};
+  const area = R.area, supply = R.supply, py = area ? area * PY : 0;
+
+  // F/S(요청 공고만) — fs.js 엔진으로 사업수지 산출
+  let S = (window.FS || {})[r.id]; if (typeof S === 'string') S = window.FS[S];
+  let fr = null, be = null, tg = null;
+  try { if (S && window.fsEngine) { fr = window.fsEngine.run(S.A); be = window.fsEngine.solveL(S.A, 0); tg = window.fsEngine.solveL(S.A, S.A.목표이익률 || 0.1); } } catch (e) { fr = null; }
+
+  // 상단 요약표 값
+  const txt = [r.title, ...ps.map(p => p.method), ...R.schedule.map(([k]) => k)].join(' ');
+  const rank = (r.title.match(/(\d)순위/) || [])[1];
+  const supplyType = /수의계약/.test(txt) ? '수의계약' : /공모/.test(txt) ? '공모' : /입찰|경쟁/.test(txt) ? '경쟁입찰'
+    : /추첨|선정일정/.test(txt) ? '추첨' : (p0.method || '-');
+  const head = [
+    ['접수경로', `${r.src || ''} 공고`],
+    ['발주처(매도자)', R.org || '-'],
+    ['사업유형', r.kind === '물건' ? '공매(실물)' : '택지 매입'],
+    ['개발용도', cut(r.cat || p0.use || '-', 10)],
+    ['공급유형', supplyType + (rank ? ` (${rank}순위)` : '')],
+    ['주요일정', R.end ? `${ymd(R.end)} 마감` : '-'],
+    ['초기 Equity', fr ? `${eok(fr.Eq)}억` : supply ? `${won(supply * 0.1)} (10%)` : '-'],
+  ];
+  const tag = fr ? '검토' : (r.kind === '물건' ? '공매' : '공고');
+  const HW = [1.25, 1.75, 1.3, 1.45, 1.55, 1.65, 1.53];   // 합 10.48
+  // 상단 요약표: [구분|사업명] / 항목 / 값 — 3행
+  const headerTable = (sl, sub) => {
+    const lab = { bold: true, color: 'FFFFFF', fill: { color: NV }, align: 'center' };
+    sl.addTable([
+      [{ text: tag, options: { bold: true, fontSize: 16, align: 'center', fill: { color: TAG } } },
+       { text: cutV(R.title, sub ? 36 - vlen(sub) : 40) + (sub ? `  —  ${sub}` : ''), options: { colspan: 6, bold: true, fontSize: 16, color: '000000' } }],
+      head.map(([k]) => ({ text: k, options: lab })),
+      head.map(([, v]) => ({ text: v, options: { align: 'center' } })),
+    ], { ...T, x: X0, y: 0.12, w: FW, colW: HW, rowH: [0.46, 0.3, 0.32], border: SOL, margin: MG, valign: 'middle' });
+    return 1.38;   // 표 아래 다음 구역 시작 y
   };
-  const kvRows = rows => rows.map(([k, v]) => [
-    { text: k, options: { bold: true, color: MUT, fill: { color: SOFT } } }, { text: String(v) }]);
+  const sec = (sl, x, y, t) => {
+    sl.addShape(P.shapes.RECTANGLE, { x, y: y + 0.11, w: 0.09, h: 0.22, fill: { color: NV }, line: { color: NV } });
+    sl.addText(t, { ...T, x: x + 0.15, y, w: 5.2, h: 0.44, fontSize: 14, bold: true, color: '000000', margin: 0 });
+    return y + 0.48;
+  };
+  let page = 0;
+  const footer = (sl, note) => {
+    page += 1;
+    sl.addText(cut(note || '자동 요약 자료로 오류가 있을 수 있습니다 — 입찰·청약 전 원문 공고를 확인하세요.', 70),
+      { ...T, x: X0, y: 7.12, w: 9.6, h: 0.3, color: MUT, margin: 0 });
+    sl.addText(String(page), { ...T, x: 10.1, y: 7.12, w: 0.56, h: 0.3, bold: true, align: 'right', margin: 0 });
+  };
+  const newSlide = sub => { const sl = P.addSlide(); sl.background = { color: 'FFFFFF' }; return [sl, headerTable(sl, sub)]; };
+  // 왼쪽 머리글(네이비) + 오른쪽 ▪ 항목, 행 사이 점선 — 양식의 '사업지 개요' 표 형식. 다음 y 반환
+  const kvTable = (sl, rows, x, y, w, lw) => {
+    rows = rows.map(([k, v]) => [k, (Array.isArray(v) ? v : [v]).filter(t => t && (t.t ?? t))]).filter(([, v]) => v.length);
+    if (!rows.length) return y;
+    const n = rows.length;
+    const H = rows.reduce((a, [k, v]) => a + rowH([[k, lw], [v.map(t => '▪ ' + (t.t ?? t)).join('\n'), w - lw]]) + 0.02 * v.length, 0);
+    sl.addTable(rows.map(([k, v], i) => {
+      const top = i === 0 ? SOL : DSH, bot = i === n - 1 ? SOL : DSH;
+      const vs = v.map(t => typeof t === 'string' ? { t } : t);
+      return [
+        { text: k, options: { bold: true, color: 'FFFFFF', fill: { color: NV }, align: 'center', border: [top, SOL, bot, SOL] } },
+        { text: vs.map((it, j) => ({ text: '▪ ' + it.t, options: { breakLine: j < vs.length - 1, color: it.red ? RED : INK, bold: !!it.red } })),
+          options: { border: [top, SOL, bot, SOL] } },
+      ];
+    }), { ...T, x, y, w, colW: [lw, w - lw], margin: MG, valign: 'middle' });
+    return y + H + 0.04;
+  };
+  const cell = (t, o = {}) => ({ text: String(t ?? ''), options: { border: [THN, THN, THN, THN], ...o } });
+  const gridTable = (sl, headRow, body, x, y, w, colW) => {
+    const h = headRow.map(t => ({ text: t, options: { bold: true, color: 'FFFFFF', fill: { color: NV }, align: 'center', border: [SOL, THN, SOL, THN] } }));
+    const rows = body.map(row => row.map(c => c && typeof c === 'object' && c.text !== undefined ? c : cell(c)));
+    sl.addTable([h, ...rows], { ...T, x, y, w, colW, margin: MG, valign: 'middle', border: THN });
+    return y + rowH([['가', 1]]) + rows.reduce((a, row) => a + rowH(row.map((c, i) => [c.text, colW[i] || 1])), 0) + 0.04;
+  };
+  // 항목 목록을 남은 높이에 들어갈 만큼만 고른다
+  const fitRows = (items, w, room) => { const out = []; let h = rowH([['가', 1]]); for (const it of items) { const d = rowH([['0', 0.5], [it, w - 0.5]]); if (h + d > room) break; h += d; out.push(it); } return out; };
 
-  // 1) 개요
-  const s1 = P.addSlide();
-  header(s1, R.title, [R.org, R.posted && `게시 ${R.posted}`, R.end && `마감 ${R.end}`].filter(Boolean).join('  ·  '));
-  const tiles = [['대지면적', areaTxt(R.area)],
-                 ['토지비', R.supply ? won(R.supply) + (R.area ? ` (평당 ${won(Math.round(R.supply/(R.area*PY)))})` : '') : ''],
-                 ['용적률', short(R.key.find(k => k[0]==='용적률')?.[1])],
-                 ['층수·높이', short(R.key.find(k => k[0]==='층수·높이')?.[1])]].filter(([, v]) => v);
-  const TW = (CW - 0.15 * 3) / 4;
-  tiles.forEach(([k, v], i) => {
-    const x = M + i * (TW + 0.15);
-    s1.addShape(P.shapes.ROUNDED_RECTANGLE, { x, y: 1.45, w: TW, h: 1.1, fill: { color: 'E3EFE9' }, line: { color: 'E3EFE9' }, rectRadius: 0.08 });
-    s1.addText(k, { ...T, x: x + 0.12, y: 1.5, w: TW - 0.24, h: 0.3, fontSize: 10, color: ACC, bold: true });
-    s1.addText(v, { ...T, x: x + 0.12, y: 1.8, w: TW - 0.24, h: 0.7, fontSize: 13, bold: true, valign: 'top' });
-  });
-  s1.addTable(kvRows(R.key.filter(([k]) => k !== '대지면적')), { ...T, x: M, y: 2.8, w: 5.9, colW: [1.35, 4.55], fontSize: 10,
-    border: { type: 'solid', pt: 0.75, color: LINE }, margin: 0.05, valign: 'middle' });
-  if (R.schedule.length) {
-    s1.addText('공급 일정', { ...T, x: 6.6, y: 2.8, w: 3.78, h: 0.32, fontSize: 12, bold: true, color: ACC });
-    s1.addTable(kvRows(R.schedule.slice(0, 8)), { ...T, x: 6.6, y: 3.18, w: 3.78, colW: [1.45, 2.33], fontSize: 9,
-      border: { type: 'solid', pt: 0.75, color: LINE }, margin: 0.04 });
-  }
-  s1.addText('원문 공고 열기', { ...T, x: 6.6, y: 6.6, w: 3.78, h: 0.32, fontSize: 10, color: ACC, hyperlink: { url: R.url } });
+  const zones = uniq(ps.map(p => p.zone)).join(', ') || r.zone || '';
+  const hasPlan = R.blocks.length || R.files.some(f => f.kind === '지구단위계획');
+  const units = uniq([b0.units, ...ps.map(p => p.units)].map(v => v && String(v))).join(' / ');
+  const far = b0.far || uniq(ps.map(p => p.far)).slice(0, 3).join(' · '), bcr = b0.bcr || p0.bcr || '';
+  const height = b0.height || b0.floors || uniq(ps.map(p => p.floors)).slice(0, 2).join(' · ');
+  const blockNames = uniq(ps.map(p => p.block)).slice(0, 4).join(', ');
+  const sch = R.schedule.filter(([, v]) => v && v !== '~');
 
-  // 2) 지구단위계획 (블록별)
-  if (R.blocks.length) {
-    R.blocks.slice(0, 8).forEach(b => {
-      const sl = P.addSlide();
-      header(sl, `지구단위계획 인허가 제한 · ${b.block}`, `${b.use || ''}${R.aiSample ? '  (AI 요약 견본)' : '  (AI 요약)'}${b.pages ? '  근거: ' + b.pages : ''}`);
-      sl.addTable(kvRows(BLOCK_FIELDS.filter(([, k]) => b[k] && k !== 'use').map(([l, k]) => [l, b[k]])), { ...T, x: M, y: 1.45, w: 5.3, colW: [1.15, 4.15],
-        fontSize: 10, border: { type: 'solid', pt: 0.75, color: LINE }, margin: 0.06, valign: 'middle' });
-      const items = [...(b.other || []).map(x => ({ t: x })), ...(R.common.length ? [{ h: '지구 공통·공고 유의사항' }] : []), ...R.common.map(x => ({ t: x }))];
-      const fs = items.length > 9 ? 9 : 10;
-      sl.addText('주요 규제', { ...T, x: 6.0, y: 1.45, w: 4.38, h: 0.32, fontSize: 12, bold: true, color: ACC });
-      sl.addText(items.map(it => it.h
-          ? { text: it.h, options: { bold: true, color: ACC, breakLine: true, paraSpaceBefore: 6 } }
-          : { text: it.t, options: { bullet: true, breakLine: true } }),
-        { ...T, x: 6.0, y: 1.82, w: 4.38, h: 5.1, fontSize: fs, valign: 'top', paraSpaceAfter: 3 });
+  // ── 1쪽: 사업지 개요 및 현황 · 주요 이슈 ─────────────────────────
+  {
+    const [sl, y0] = newSlide();
+    let yl = sec(sl, X0, y0, '사업지 개요 및 현황');
+    const tiles = [
+      ['대지면적', area ? `${Math.round(py).toLocaleString()}평` : '-', area ? `${Math.round(area).toLocaleString()}㎡` : ''],
+      ['공급가격', supply ? won(supply) + '원' : '-', ps.length > 1 ? `${ps.length}필지 합계` : (blockNames || ' ')],
+      ['평당 토지가', supply && py ? `${Math.round(supply / py / 1e4).toLocaleString()}만원` : '-', '공급가 ÷ 대지'],
+      ['용적률', cutV(String(far || '-').split(' (')[0].split(' · ')[0].replace(/\s*이하$/, ''), 6) + (String(far).includes(' · ') ? ' 외' : ''), cut((units ? units : String(height)).split(' (')[0].split(' · ')[0], 9) || ' '],
+    ];
+    const TW = (WL - 0.08 * 3) / 4;
+    if (area || supply) tiles.forEach(([k, v, s2], i) => {
+      sl.addText([
+        { text: k, options: { fontSize: 12, bold: true, color: NV, breakLine: true } },
+        { text: v, options: { fontSize: 16, bold: true, color: '000000', breakLine: true } },
+        { text: s2 || ' ', options: { fontSize: 12, color: MUT } },
+      ], { ...T, shape: P.shapes.RECTANGLE, x: X0 + i * (TW + 0.08), y: yl, w: TW, h: 1.02, fill: { color: LB }, line: { color: NV, width: 0.75 },
+        align: 'center', valign: 'middle', margin: 0.03 });
     });
-  } else {
-    const sl = P.addSlide();
-    header(sl, '지구단위계획', '세부 제한(층수·높이·허용용도)은 원문에서 확인하세요');
-    const pf = R.files.filter(f => f.kind === '지구단위계획' || f.kind === '공고문');
-    sl.addText(pf.length ? pf.map(f => ({ text: `[${f.kind}] ${f.name}`, options: { bullet: true, breakLine: true, hyperlink: { url: f.url } } }))
-      : '첨부된 지구단위계획 문서가 없습니다.', { ...T, x: M, y: 1.45, w: CW, h: 3, fontSize: 11, valign: 'top' });
+    if (area || supply) yl += 1.12;
+    const loc = uniq(ps.map(p => [p.district, p.addr, p.jibun].filter(Boolean).join(' '))).slice(0, 2).join(', ') || r.addr || '';
+    const contract = (sch.find(([k]) => /계약/.test(k)) || [])[1];
+    const yLe = kvTable(sl, [
+      ['위 치', cut([r.sido && !loc.startsWith(r.sido) ? r.sido : '', loc, blockNames ? `(${blockNames})` : ''].filter(Boolean).join(' '), 44)],
+      ['지역지구', cut([zones, hasPlan ? '지구단위계획구역' : ''].filter(Boolean).join(', '), 44)],
+      ['대지면적', area ? `${Math.round(py).toLocaleString()}평 (${Math.round(area).toLocaleString()}㎡)${ps.length > 1 ? ` · ${ps.length}필지` : ''}` : ''],
+      ['매각가격', supply ? `${won(supply)}원${py ? ` (${Math.round(supply / py / 1e3).toLocaleString()}천원/평)` : ''}` : ''],
+      ['토지 현황', uniq([p0.jimok && `지목 ${p0.jimok}`, ...ps.map(p => p.use_from && `토지사용 ${p.use_from}`), ...ps.map(p => p.note)]).slice(0, 2).map(x => cut(x, 40))],
+      ['공급 조건', [cut([supplyType + (rank ? `(${rank}순위)` : ''), p0.deposit >= 1e4 ? `예약금 ${won(p0.deposit)}원` : ''].filter(Boolean).join(' · '), 40),
+        contract ? cut(`계약 ${contract}`, 40) : ''].filter(Boolean)],
+    ], X0, yl, WL, 1.2);
+
+    const yr = sec(sl, XR, y0, '주요 이슈');
+    const brk = uniq((r.title.match(/\[[^\]]+\]/g) || []).map(x => x.slice(1, -1)).filter(x => !/정정/.test(x)));
+    const rules = (b0.other || []).filter(x => !/주차/.test(x));
+    const rows = [
+      ['공급 일정', sch.slice(0, 3).map(([k, v]) => cut(`${k.replace(/일정|일시|납부마감/g, '').trim()} ${v}`, 32))],
+      ['대금 조건', brk.map(x => cut(x, 44))],
+      ['인허가 제한', rules.slice(0, 2).map(x => cut(noPage(x), 44))],
+      ['공고 유의', R.common.slice(0, 2).map(x => cut(noPage(x), 44))],
+      ['F/S 판단', fr ? [{ t: `${S.verdict} · 이익률 ${pct(fr.이익률)} · ROE ${Math.round(fr.ROE * 100).toLocaleString()}%`, red: true },
+        cut(`목표 10% 토지가 ${tg != null ? eok(tg) + '억' : '-'} / 손익분기 ${be != null ? eok(be) + '억' : '-'}`, 44),
+        ...(S.summary || []).filter(x => x[2]).slice(0, 1).map(([k, v]) => cut(`${k}: ${v}`, 44))]
+        : ['F/S 미작성 — 요청 시 당사 지침으로 산정'] ],
+    ];
+    if (!R.blocks.length) rows.splice(2, 2, ['지구단위계획', hasPlan ? '세부 제한은 첨부 원문 확인(마지막 쪽 목록)' : '첨부 지구단위계획 없음 — 공고문 확인']);
+    const yRe = kvTable(sl, rows, XR, yr, WR, 1.25);
+    // 하단 결론 한 줄 박스(도형 안에 글자) — 핵심 문구 주황 강조
+    const yC = Math.max(yLe, yRe) + 0.15;
+    if (yC < YB - 0.66) {
+      const key = fr ? [`${S.verdict} — 이익률 ${pct(fr.이익률)}`, ` · ${cut(String(S.line || '').replace(/^이익률[^·]+·\s?/, ''), 96)}`]
+        : [`${supplyType}${rank ? `(${rank}순위)` : ''} · ${R.end ? ymd(R.end) + ' 마감' : '일정 공고문 확인'}`,
+           `${supply ? ` · 공급가 ${won(supply)}원` : ''}${py && supply ? ` (평당 ${Math.round(supply / py / 1e4).toLocaleString()}만원)` : ''} · F/S 요청 시 사업성 검토`];
+      sl.addText([{ text: '▶ ' + key[0], options: { bold: true, color: 'C55A11' } }, { text: key[1] }],
+        { ...T, shape: P.shapes.RECTANGLE, x: X0, y: Math.min(yC, YB - 0.66), w: FW, h: 0.62, fill: { color: 'FFFFFF' }, line: { color: NV, width: 1 }, valign: 'middle', margin: 0.1 });
+    }
+    footer(sl);
   }
 
-  // 3) 필지 목록
-  if (R.plots.length) {
-    const sl = P.addSlide();
-    header(sl, `공급 필지 (${R.plots.length}필지)`, R.plotsSrc === '필지목록' ? '첨부 필지목록 엑셀 기준' : 'LH 상세페이지 기준');
-    const head = PLOT_HEAD.map(t => ({ text: t, options: { bold: true, color: 'FFFFFF', fill: { color: ACC } } }));
-    sl.addTable([head, ...R.plots.slice(0, 120).map(p => plotRow(p).map(t => ({ text: t })))], { ...T, x: M, y: 1.4, w: CW,
-      colW: [1.3, 1.95, 1.2, 1.0, 1.2, 1.2, 1.25, 0.83], fontSize: 8, border: { type: 'solid', pt: 0.5, color: LINE }, margin: 0.04,
-      autoPage: true, autoPageRepeatHeader: true, autoPageSlideStartY: 1.4, newSlideStartY: 1.4 });
+  // ── 2쪽: 개발계획 · 사업수지(안) — 내용이 없는 공고(필지·지구단위계획·F/S 모두 없음)는 생략 ──
+  if (fr || ps.length || R.blocks.length) {
+    const [sl, y0] = newSlide();
+    const yl = sec(sl, X0, y0, '개발계획');
+    kvTable(sl, [
+      ['용적률', cut(far, 60)],
+      ['건폐율', cut(bcr, 30)],
+      ['높이·층수', cut(height, 60)],
+      ['세대·규모', cut(units, 60)],
+      ['허용용도', cut(b0.allowed, 66)],
+      ['불허용도', cut(b0.banned, 66)],
+      ['주차·배치', (b0.other || []).filter(x => /주차|배치|건축한계|주거동/.test(x)).slice(0, 2).map(x => cut(noPage(x), 44))],
+    ].concat(R.blocks.length ? [] : [['지구단위계획', hasPlan ? '세부 제한은 첨부 원문 확인' : '첨부 없음 — 공고문 확인']]), X0, yl, WL, 1.2);
+
+    if (fr) {
+      const yr = sec(sl, XR, y0, `사업수지(안) — 당사 F/S (${S.date || ''})`);
+      const sum = k => (fr.rows[k] || []).reduce((a, b) => a + b, 0);
+      const fin = ['토지할부이자', 'BL이자', 'BL수수료', 'PF이자', 'PF수수료보증', '후불이자'].reduce((a, k) => a + sum(k), 0);
+      const opx = fr.기타비 - fin, cost = fr.토지비 + fr.공사비 + fr.기타비;
+      const A = S.A, d = fr.d;
+      const priceWhy = A.분양가입력 ? '직접 입력' : (fr.cap <= fr.mkt ? '상한제' : '시세×85%');
+      const G = (t, n) => ({ text: t, options: { rowspan: n, bold: true, align: 'center', fill: { color: LB }, border: [SOL, THN, SOL, SOL] } });
+      const B = (t, o = {}) => cell(t, { bold: true, align: 'center', ...o });
+      const N = (t, o = {}) => cell(t, { align: 'right', ...o });
+      const SUB = { fill: { color: LB }, bold: true };
+      const body = [
+        [G('매\n출', 3), B('공동주택'), N(eok(fr.주거매출)), N(pct(fr.주거매출 / fr.매출)), cell(`@${Math.round(fr.price / 10).toLocaleString()}만원 (${priceWhy})`)],
+        [B('상가'), N(eok(fr.상가매출)), N(pct(fr.상가매출 / fr.매출)), cell(fr.상가매출 ? `${Math.round(d.상가평).toLocaleString()}평` : '근생 0% (보수적)')],
+        [B('소 계', SUB), N(eok(fr.매출), SUB), N('100.0%', SUB), cell(`분양 ${Math.round(d.주거평).toLocaleString()}평`, SUB)],
+        [G('비\n용', 5), B('토지비'), N(eok(fr.토지비)), N(pct(fr.토지비 / cost)), cell(`평당 ${Math.round(A.공급가격 / (A.대지 * PY) / 10).toLocaleString()}만원`)],
+        [B('공사비'), N(eok(fr.공사비)), N(pct(fr.공사비 / cost)), cell(`@${Math.round(A.공사비평당 / 10).toLocaleString()}만원 × ${Math.round(d.연면적평).toLocaleString()}평`)],
+        [B('사업비'), N(eok(opx)), N(pct(opx / cost)), cell(`기타비 ${pct(fr.기타비율)} (28% ${fr.기타비율 > (A.기타비기준 || 0.28) ? '초과' : '미만'})`)],
+        [B('금융비'), N(eok(fin)), N(pct(fin / cost)), cell('BL·PF·후불이자')],
+        [B('소 계', SUB), N(eok(cost), SUB), N('100.0%', SUB), cell('', SUB)],
+        [B('사업이익', { colspan: 2, fill: { color: LB } }), N(eok(fr.이익), { bold: true, color: fr.이익 < 0 ? RED : INK }),
+          N(pct(fr.이익률), { bold: true, color: fr.이익률 < (A.목표이익률 || 0.1) ? RED : INK }), cell(`판정 ${S.verdict || ''}`, { bold: true, color: RED })],
+        [B('ROE', { colspan: 2, fill: { color: LB } }), N(`${Math.round(fr.ROE * 100).toLocaleString()}%`), cell(''), cell(`Equity ${eok(fr.Eq)}억`)],
+        [B(`목표${Math.round((A.목표이익률 || 0.1) * 100)}% 토지가`, { colspan: 2, fill: { color: LB } }), N(tg != null ? eok(tg) : '-'), cell(''), cell(`손익분기 ${be != null ? eok(be) + '억' : '-'}`)],
+      ];
+      // 행 병합이 있어 높이 추정 없이 고정 행 높이 사용
+      sl.addTable([[{ text: '구 분', options: { colspan: 2, bold: true, color: 'FFFFFF', fill: { color: NV }, align: 'center' } },
+        ...['금액(억)', '비율', '비 고'].map(t => ({ text: t, options: { bold: true, color: 'FFFFFF', fill: { color: NV }, align: 'center' } }))], ...body],
+        { ...T, x: XR, y: yr, w: WR, colW: [0.42, 0.95, 0.85, 0.8, 2.34], rowH: 0.36, margin: MG, valign: 'middle', border: THN });
+      sl.addText('단위 억원 · 당사 택지 투자검토 지침 기준 엔진 산출값', { ...T, x: XR, y: YB - 0.32, w: WR, h: 0.3, color: MUT, margin: 0, align: 'right' });
+    } else {
+      let yr = ps.length ? sec(sl, XR, y0, `공급 필지 요약 (${ps.length}필지)`) : y0;
+      const top = [...ps].sort((a, b) => (b.price || 0) - (a.price || 0)).slice(0, 8);
+      if (top.length) yr = gridTable(sl, ['블록·용지', '면적(평)', '공급가격', '평당가'], top.map(p => [
+        cut([p.block, p.use].filter(Boolean).join(' · '), 14),
+        cell(p.area ? Math.round(p.area * PY).toLocaleString() : '', { align: 'right' }),
+        cell(p.price ? won(p.price) + '원' : '', { align: 'right' }),
+        cell(p.price && p.area ? Math.round(p.price / (p.area * PY) / 1e4).toLocaleString() + '만원' : '', { align: 'right' })]), XR, yr, WR, [2.0, 1.0, 1.26, 1.1]);
+      if (ps.length > 8) { sl.addText('공급가 상위 8필지 · 전체는 공급 필지 쪽 참조', { ...T, x: XR, y: yr, w: WR, h: 0.3, color: MUT, margin: 0 }); yr += 0.34; }
+      sl.addText([
+        { text: '사업수지(안)', options: { bold: true, color: NV, breakLine: true } },
+        { text: 'F/S 미작성 공고입니다. 요청 시 당사 택지 투자검토 지침으로 사업수지와 손익분기·목표 토지가를 산정합니다.' },
+      ], { ...T, shape: P.shapes.RECTANGLE, x: XR, y: Math.min(yr + 0.12, YB - 1.0), w: WR, h: 1.0,
+        fill: { color: 'F2F2F2' }, line: { color: 'A6A6A6', width: 0.75, dashType: 'dash' }, valign: 'middle', margin: 0.1 });
+    }
+    footer(sl);
+  }
+
+  // ── 지구단위계획 인허가 제한 (블록별) ─────────────────────────────
+  R.blocks.slice(0, 6).forEach(b => {
+    const [sl, y0] = newSlide(`지구단위계획 ${cut(b.block, 12)}`);
+    const yl = sec(sl, X0, y0, `계획지표 — ${cut(b.block, 16)}`);
+    kvTable(sl, BLOCK_FIELDS.filter(([, k]) => b[k]).map(([l, k]) => [l, cut(b[k], k === 'allowed' || k === 'banned' ? 110 : 70)]), X0, yl, WL, 1.1);
+    let yr = sec(sl, XR, y0, '주요 규제');
+    const other = fitRows((b.other || []).map(x => cut(noPage(x), 70)), WR, YB - yr - 1.2);
+    if (other.length) yr = gridTable(sl, ['No', '내 용'], other.map((x, i) => [cell(i + 1, { align: 'center' }), x]), XR, yr, WR, [0.5, WR - 0.5]) + 0.08;
+    const com = R.common.map(x => cut(noPage(x), 70));
+    if (com.length && YB - yr > 1.2) {
+      yr = sec(sl, XR, yr, '공고 유의사항');
+      const c2 = fitRows(com, WR, YB - yr);
+      if (c2.length) gridTable(sl, ['No', '내 용'], c2.map((x, i) => [cell(i + 1, { align: 'center' }), x]), XR, yr, WR, [0.5, WR - 0.5]);
+    }
+    footer(sl, `AI 요약${R.aiSample ? '(견본)' : ''} · 근거 ${b.pages || '-'} — 원문 확인 필요`);
+  });
+
+  // ── 공급 필지 (8필지씩, 최대 3쪽) ──────────────────────────────────
+  const nP = Math.min(ps.length, 24);
+  for (let i = 0; i < nP; i += 8) {
+    const [sl, y0] = newSlide(`공급 필지${nP > 8 ? ` ${i / 8 + 1}/${Math.ceil(nP / 8)}` : ''}`);
+    const y = sec(sl, X0, y0, `공급 필지 (${ps.length}필지 · ${R.plotsSrc === '필지목록' ? '첨부 필지목록' : 'LH 상세페이지'} 기준)`);
+    const yE = gridTable(sl, ['블록·용지', '소재지·지번', '면적', '공급가격', '건폐율/용적률', '토지사용'], ps.slice(i, i + 8).map(p => [
+      cut([p.block, p.use].filter(Boolean).join(' · '), 18), cut([p.district, p.addr, p.jibun].filter(Boolean).join(' '), 20),
+      cell(p.area ? `${Math.round(p.area * PY).toLocaleString()}평` : '', { align: 'right' }),
+      cell(p.price ? `${won(p.price)}원` : '', { align: 'right' }),
+      cut([p.bcr, p.far].filter(Boolean).join(' / '), 18), cut(p.use_from || '', 12)]),
+      X0, y, FW, [2.0, 2.3, 1.15, 1.35, 2.18, 1.5]);
+    if (i + 8 >= nP && ps.length > 24) sl.addText(`외 ${ps.length - 24}필지는 원문 필지목록 참조`, { ...T, x: X0, y: yE, w: 6, h: 0.3, color: MUT, margin: 0 });
+    footer(sl);
+  }
+
+  // ── 공급 일정 · 원문 자료 ──────────────────────────────────────────
+  {
+    const [sl, y0] = newSlide('일정·원문');
+    const yl = sec(sl, X0, y0, '공급 일정');
+    if (sch.length) gridTable(sl, ['구 분', '일 정'], sch.slice(0, 9).map(([k, v]) => [cut(k, 12), cut(v, 26)]), X0, yl, WL, [1.75, WL - 1.75]);
+    else sl.addText('공고문 참조', { ...T, x: X0, y: yl, w: WL, h: 0.3 });
+    const yr = sec(sl, XR, y0, '원문 자료');
+    const fl = R.files.slice(0, 13);
+    sl.addText([{ text: '원문 공고 열기', options: { hyperlink: { url: R.url }, color: '0563C1', bold: true, breakLine: true } },
+      ...fl.map((f, i) => ({ text: cut(`[${f.kind}] ${f.name}`, 36), options: { hyperlink: { url: f.url }, color: '0563C1', breakLine: i < fl.length - 1 } }))],
+      { ...T, x: XR, y: yr, w: WR, h: YB - yr, valign: 'top', margin: 0.04, paraSpaceAfter: 3 });
+    footer(sl, `작성 ${R.made} · 자동 요약 자료로 오류가 있을 수 있습니다 — 원문 공고 확인`);
   }
 
   // 모든 글자에 윤곽선: 흰색 · 투명도 90% · 0.75pt
@@ -674,8 +870,9 @@ async function exportPptx(r){
     const xml = await zip.file(f).async('string');
     zip.file(f, xml.replace(/<a:rPr(\s[^>]*?)?(\/?)>/g, (m, attrs = '', slash) => slash ? `<a:rPr${attrs}>${LN}</a:rPr>` : `<a:rPr${attrs}>${LN}`));
   }
+  Object.keys(zip.files).forEach(n => { if (zip.files[n].dir) delete zip.files[n]; });   // 폴더 항목 제거(클라우드 열기 오류 방지)
   const blob = await zip.generateAsync({ type: 'blob', mimeType: 'application/vnd.openxmlformats-officedocument.presentationml.presentation' });
-  download(blob, `${safeName(R.title)}_요약.pptx`);
+  download(blob, `${safeName(R.title)}_프로젝트요약.pptx`);
 }
 
 document.getElementById('list').addEventListener('click', async e => {
