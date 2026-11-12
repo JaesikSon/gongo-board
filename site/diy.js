@@ -12,6 +12,9 @@ const LIB = {
   xlsx: 'https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js',
   pdf: 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js',
   pdfWorker: 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js',
+  ocr: 'https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js',
+  ocrWorker: 'https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/worker.min.js',
+  ocrCore: 'https://cdn.jsdelivr.net/npm/tesseract.js-core@5.1.1',
 };
 const loaded = {};
 const loadLib = k => loaded[k] || (loaded[k] = new Promise((ok, no) => { const s = document.createElement('script'); s.src = LIB[k]; s.onload = ok; s.onerror = () => no(new Error('라이브러리를 불러오지 못했습니다')); document.head.appendChild(s); }));
@@ -24,7 +27,8 @@ const ST = {
   parcels: [], s1: { donate: 0, far: null, bcr: null, height: null, sido: '' },
   s2: { mode: 'gen', use: '공동주택', commPct: 0, floors: 25, perFloor: 4, hh: null, opEx: 84, stall: 35, partial: false, checked: false },
   design: null, files: [], land: null,
-  s3: { land: null, date: '', permit: 12, sale: null, rate: 100, priceMode: 'unit', price: null, mkt: null, mktRatio: 85, comm: null, cost: null, cover: 50, pfRate: 4.6, blRate: 6.0, blRate2: 8.0, build: null, landType: '민간택지', trust: '관리형토지신탁', midInt: '무이자', demol: null },
+  s3: { land: null, date: '', permit: 12, sale: null, rate: 100, priceMode: 'unit', price: null, mkt: null, mktRatio: 85, comm: null, cost: null, cover: 50, pfRate: 4.6, blRate: 6.0, blRate2: 8.0, build: null, landType: '민간택지', trust: '관리형토지신탁', midInt: '무이자', demol: null, sched: '0:10, 3:90', disc: 0 },
+  notice: null,
   result: null,
 };
 
@@ -160,6 +164,49 @@ function generate() {
   };
 }
 
+// ── 스캔 PDF·이미지 글자 인식 (OCR, 브라우저 안에서 처리) ─────────────────
+let OCRW = null;
+const ocrStat = t => { const el = $('#fstat'); if (el) el.textContent = t; };
+async function ocrWorker() {
+  if (OCRW) return OCRW;
+  await loadLib('ocr');
+  OCRW = (async () => {
+    const w = await window.Tesseract.createWorker(['kor', 'eng'], 1, { langPath: new URL('data/ocr/', location.href).href, gzip: true, workerPath: LIB.ocrWorker, corePath: LIB.ocrCore,
+      logger: m => { if (m.status === 'recognizing text') ocrStat(`글자 인식 중… ${Math.round(m.progress * 100)}%`); else if (/loading/.test(m.status)) ocrStat('글자 인식 엔진 준비 중… (처음 한 번, 약 5MB)'); } });
+    await w.setParameters({ tessedit_pageseg_mode: '11', preserve_interword_spaces: '1', user_defined_dpi: '300' });
+    return w;
+  })();
+  return OCRW;
+}
+function binarize(cv) {   // 표 칸 배경색 제거 → 흑백
+  const ctx = cv.getContext('2d'), im = ctx.getImageData(0, 0, cv.width, cv.height), d = im.data;
+  for (let i = 0; i < d.length; i += 4) { const v = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2] > 150 ? 255 : 0; d[i] = d[i + 1] = d[i + 2] = v; }
+  ctx.putImageData(im, 0, 0); return cv;
+}
+async function ocrCanvas(cv, label) {
+  const w = await ocrWorker(); ocrStat(`${label} 글자 인식 중…`);
+  const { data } = await w.recognize(binarize(cv), {}, { blocks: true });
+  const words = (data.blocks || []).flatMap(b => b.paragraphs.flatMap(p => p.lines.flatMap(l => l.words))).map(x => ({ s: x.text.trim(), x: x.bbox.x0, y: (x.bbox.y0 + x.bbox.y1) / 2, w: x.bbox.x1 - x.bbox.x0, h: x.bbox.y1 - x.bbox.y0 }));
+  return window.diyParse.ocrFix(window.diyParse.wordsToMd(words));
+}
+async function ocrPdf(data, maxPages = 8) {
+  const doc = await window.pdfjsLib.getDocument({ data }).promise, out = [];
+  for (let p = 1; p <= Math.min(doc.numPages, maxPages); p++) {
+    const pg = await doc.getPage(p), vp0 = pg.getViewport({ scale: 1 }), sc = Math.min(300 / 72, 5000 / Math.max(vp0.width, vp0.height)), vp = pg.getViewport({ scale: sc });
+    const cv = document.createElement('canvas'); cv.width = Math.round(vp.width); cv.height = Math.round(vp.height);
+    const ctx = cv.getContext('2d'); ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, cv.width, cv.height);
+    await pg.render({ canvasContext: ctx, viewport: vp }).promise;
+    out.push(`\n## p.${p} (OCR)\n`, await ocrCanvas(cv, `${p}/${Math.min(doc.numPages, maxPages)}쪽`));
+  }
+  return out.join('\n');
+}
+async function ocrImage(file) {
+  const bmp = await createImageBitmap(file), k = Math.min(1, 5000 / Math.max(bmp.width, bmp.height)) * (Math.max(bmp.width, bmp.height) < 2500 ? 2 : 1);
+  const cv = document.createElement('canvas'); cv.width = Math.round(bmp.width * k); cv.height = Math.round(bmp.height * k);
+  const ctx = cv.getContext('2d'); ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, cv.width, cv.height); ctx.drawImage(bmp, 0, 0, cv.width, cv.height);
+  return `\n## ${file.name} (OCR)\n` + await ocrCanvas(cv, '이미지');
+}
+
 // ── STEP2 파일 인식 ───────────────────────────────────────────────────
 async function readFile(file) {
   const buf = await file.arrayBuffer(), rec = { name: file.name, type: file.type, size: file.size, md: '', kind: '' };
@@ -167,9 +214,13 @@ async function readFile(file) {
     await loadLib('pdf'); window.pdfjsLib.GlobalWorkerOptions.workerSrc = LIB.pdfWorker;
     const r = await window.diyParse.pdfToMd(window.pdfjsLib, new Uint8Array(buf.slice(0)));
     rec.md = r.md; rec.kind = r.chars < 40 ? 'scan' : 'pdf';
+    if (rec.kind === 'scan') { try { rec.md = await ocrPdf(new Uint8Array(buf.slice(0))); rec.kind = 'ocr'; } catch (e) { rec.err = 'OCR 실패: ' + e.message; } }   // 스캔 PDF도 최대한 읽기
   } else if (/\.xlsx?$/i.test(file.name)) {
     await loadLib('xlsx'); const r = await window.diyParse.xlsxToMd(window.ExcelJS, buf.slice(0)); rec.md = r.md; rec.kind = 'xlsx';
-  } else if (/^image\//.test(file.type)) { rec.kind = 'image'; rec.url = URL.createObjectURL(file); }
+  } else if (/^image\//.test(file.type)) {
+    rec.kind = 'image'; rec.url = URL.createObjectURL(file);
+    try { rec.md = await ocrImage(file); rec.kind = 'ocr-img'; } catch (e) { rec.err = 'OCR 실패: ' + e.message; }
+  }
   else rec.kind = 'other';
   if (CFG.collectUrl && ST.consent) collect('upload', { file: { name: file.name, type: file.type, size: file.size, md: rec.md.slice(0, 200000), b64: file.size <= 20e6 ? b64(buf) : null } });
   return rec;
@@ -188,6 +239,52 @@ function fromParsed(p, gross) {
     types: types.map(t => ({ name: t.name, use: t.use, ex: t.ex, sup: t.sup, con: t.con, count: t.count })),
     warn: [], recognized: rec,
   };
+}
+
+// ── 토지대금 납부일정: '0:10, 18:8, … 60:50' (개월차:비율%) ─────────────
+function parseSched(t) {
+  const out = String(t || '').split(/[,\n;]+/).map(x => x.trim()).filter(Boolean).map(x => { const m = x.match(/^(-?\d+(?:\.\d+)?)\s*[:：]\s*(\d+(?:\.\d+)?)\s*%?$/); return m ? [+m[1], +m[2] / 100] : null; });
+  if (!out.length || out.some(x => !x)) return null;
+  return out.sort((a, b) => a[0] - b[0]);
+}
+const schedText = arr => arr.map(([m, r]) => `${m}:${Math.round(r * 10000) / 100}`).join(', ');
+
+// ── 공고에서 불러오기 (diy.html?notice=ID) ───────────────────────────────
+async function loadNotice(id) {
+  const get = u => fetch(u + '?t=' + Date.now()).then(r => r.ok ? r.json() : null).catch(() => null);
+  const [N, OV, FS] = await Promise.all([get('data/notices.json'), get('data/notice_sum.json'), get('data/fs/index.json')]);
+  let r = N && (N.items || []).find(x => x.id === id);
+  if (!r) return alertBox('공고를 찾지 못했습니다 — 마감되었거나 목록에서 빠진 공고입니다.');
+  if (OV && OV[id] && !r.sum) r = Object.assign({}, r, OV[id]);
+  const sum = r.sum || {}, plots = (sum.plots || []).filter(p => nv(p.area) > 0), fs = FS && FS[id];
+  const pct = s => { const m = String(s || '').match(/([\d.]+)\s*%/); return m ? +m[1] : null; };
+  const flo = s => { const m = String(s || '').match(/(\d+)\s*층/); return m ? +m[1] : null; };
+  const zoneOf = p => p.zone || r.zone || '';
+  ST.notice = { id, title: r.title, url: r.url, org: r.org || r.src, noZone: false };
+  ST.title = r.title;
+  const base = (r.addr || [r.sido, r.sgg].filter(Boolean).join(' ')).trim();
+  ST.parcels = (plots.length ? plots : [{ block: '', addr: base, area: r.area, zone: r.zone }]).map(p => ({
+    q: `${p.addr && !base.includes(p.addr) ? p.addr : base} ${p.block || p.jibun || ''}`.trim(), addr: `${p.addr && !base.includes(p.addr) ? p.addr : base} ${p.block || p.jibun || ''}`.trim(),
+    area: nv(p.area), jimok: p.jimok || '대', zone: zoneOf(p), price: null, pnu: r.pnu || '', uses: [], src: 'notice' }));
+  if (ST.parcels.some(p => !p.zone)) { ST.notice.noZone = true; ST.parcels.forEach(p => { if (!p.zone) p.zone = '제3종일반주거지역'; }); }
+  const p0 = plots[0] || {};
+  ST.s1.sido = r.sido || ''; ST.s1.far = pct(p0.far); ST.s1.bcr = pct(p0.bcr);
+  const fl = flo(p0.floors); if (fl) ST.s2.floors = fl;
+  const hh = plots.reduce((a, p) => a + (nv(String(p.units || '').replace(/[^\d].*$/, '')) || 0), 0); if (hh) ST.s2.hh = hh;
+  ST.s2.mode = 'file';
+  const price = r.supply || plots.reduce((a, p) => a + (nv(p.price) || 0), 0) || r.apsl || r.minp;
+  if (price) ST.s3.land = Math.round(price / 1e6) / 100;   // 원 → 억
+  const sch = sum.schedule || {}, ck = Object.keys(sch).find(k => /계약/.test(k));
+  const dm = ck && String(sch[ck]).match(/(\d{4})[.\-](\d{1,2})[.\-](\d{1,2})/); if (dm) ST.s3.date = `${dm[1]}-${dm[2].padStart(2, '0')}-${dm[3].padStart(2, '0')}`;
+  if (/LH|iH|GH|도시공사|토지주택|택지|공동주택용지/.test([r.src, r.org, r.ot, r.title].join(' '))) ST.s3.landType = '공공택지';
+  if (fs && fs.A) {   // 같은 공고의 사업성 분석이 있으면 공고 조건(토지대금 납부일정·선납할인·인허가)을 그대로 사용
+    if (Array.isArray(fs.A.토지일정)) ST.s3.sched = schedText(fs.A.토지일정);
+    if (fs.A.선납할인율 != null) ST.s3.disc = fs.A.선납할인율 * 100;
+    if (fs.A.인허가기간) ST.s3.permit = fs.A.인허가기간;
+    ST.notice.fs = true;
+  } else ST.s3.permit = 24;   // 공고 검토 기본: 설계 6 + 심의·승인 15 + 착공·분양 준비 3
+  ST.step = 1; render();
+  alertBox('공고 조건을 불러왔습니다 — 동의 후 설계개요 파일을 올리세요.');
 }
 
 // ── STEP3 → F/S 입력 ─────────────────────────────────────────────────
@@ -212,11 +309,14 @@ function specOf() {
   if (s3.priceMode === 'py' && nv(s3.price)) 주거총 = nv(s3.price) * 10 * supTot * PY;
   const op = d.use === '오피스텔';
   const unitPrice = 주거총 ? 주거총 / 세대 : (nv(s3.mkt) || 0) * 10 * (supTot / 세대) * PY * (nv(s3.mktRatio) || 85) / 100;
+  const sched = parseSched(s3.sched) || [[0, 0.1], [3, 0.9]];
+  const allSup = types.length && types.every(t => nv(t.sup) > 0);
   const A = Object.assign({}, DIY_DEF, {
-    대지, 용적률: 지상 / 대지, 근생비율, 세대수: 세대, 층수: nv(d.지상층) || 25, 설계연면적: nv(d.연면적),
+    대지, 용적률: 지상 / 대지, 근생비율, 주거분양평: allSup ? Math.round(supTot * PY * 100) / 100 : '',
+    토지일정: sched, 계약률: sched[0][0] === 0 ? sched[0][1] : 0, 선납할인율: (nv(s3.disc) || 0) / 100, 세대수: 세대, 층수: nv(d.지상층) || 25, 설계연면적: nv(d.연면적),
     공급가격: Math.round(nv(s3.land) * 1e5), 계약일: s3.date || new Date(Date.now() + 30 * 864e5).toISOString().slice(0, 10),
     인허가기간: nv(s3.permit) || 12, 공사기간입력: nv(s3.build) != null ? nv(s3.build) : '', 분양기간: nv(s3.sale), 분양률: (nv(s3.rate) || 100) / 100,
-    분양가입력: 주거총 ? 주거총 / 주거평 : '', 시세: nv(s3.mkt) ? nv(s3.mkt) * 10 * (supTot / 세대 * PY) / (주거평 / 세대) : 0, 시세반영률: (nv(s3.mktRatio) || 85) / 100,
+    분양가입력: 주거총 ? 주거총 / (allSup ? supTot * PY : 주거평) : '', 시세: nv(s3.mkt) ? nv(s3.mkt) * 10 * (supTot / 세대 * PY) / (주거평 / 세대) : 0, 시세반영률: (nv(s3.mktRatio) || 85) / 100,
     상가시세: d.comm && nv(s3.comm) ? nv(s3.comm) * 10 * (nv(d.comm.con) || commSup) * PY / (commSup * PY) : 0,
     공사비평당: nv(s3.cost) * 10, 공사비확보율: (nv(s3.cover) || 50) / 100,
     PF선순위금리: (nv(s3.pfRate) || 4.6) / 100, BL선순위금리: (nv(s3.blRate) || 6) / 100, BL후순위금리: (nv(s3.blRate2) != null ? nv(s3.blRate2) : (nv(s3.blRate) || 6) + 2) / 100,
@@ -236,18 +336,20 @@ function specOf() {
     title, date: today.replace(/-/g, '.'), dateISO: today, name: `${title.replace(/[\\/:*?"<>|]/g, '')}_사업성검토_${today.replace(/-/g, '')}.xlsx`, A, design,
     site: { addr: ST.parcels.map(p => p.addr || p.q).join(', '), zone: A1.zones.map(([z]) => z).join(', ') + (A1.flags.some(f => /지구단위/.test(f)) ? ', 지구단위계획구역' : '') },
     notes: {
-      공급가격: '사용자 입력 토지 매입가', 대지: `사업 대지(기부채납 후) — ${d.source}`, 용적률: '설계개요 지상 연면적 ÷ 대지', 설계연면적: `${d.source}: 지상+지하`,
+      대지: `사업 대지(기부채납 후) — ${d.source}`, 용적률: '설계개요 지상 연면적 ÷ 대지', 설계연면적: `${d.source}: 지상+지하`,
       분양가입력: 주거총 ? (s3.priceMode === 'unit' ? `세대(실)당 ${s3.price}억 × ${세대}` : `공급평당 ${s3.price}만원`) + ' → 주거 지상면적 평당 환산' : '시세×반영률 / 상한제 상한 중 낮은 값',
       시세: nv(s3.mkt) ? `인근 시세 공급평당 ${s3.mkt}만원(사용자 조사)` : '', 공사비평당: `사용자 입력 ${s3.cost}만원/평`, 분양기간: `${s3.sale}개월 ${s3.rate}% (사용자 입력)`,
-      인허가기간: '사용자 입력', 택지구분: `사용자 선택: ${s3.landType || '민간택지'}`, 신탁유형: `사용자 선택: ${s3.trust || '관리형토지신탁'}`, 중도금이자방식: `사용자 선택: ${s3.midInt || '무이자'}`, 공사비확보율: '사용자 입력(기본 50%)', 공사기간입력: nv(s3.build) != null ? '사용자 입력' : '미입력 → 기준(30층 미만 34개월, 30층 이상 34+(층수−29))',
+      인허가기간: '사용자 입력', 선납할인율: nv(s3.disc) ? `선납일수 × 연 ${s3.disc}% (공고 조건)` : '', 주거분양평: allSup ? '설계개요 타입별 공급면적 합계' : '',
+      공급가격: ST.notice ? `공고 공급가격(기준가) — ${ST.notice.title}` : '사용자 입력 토지 매입가', 택지구분: `사용자 선택: ${s3.landType || '민간택지'}`, 신탁유형: `사용자 선택: ${s3.trust || '관리형토지신탁'}`, 중도금이자방식: `사용자 선택: ${s3.midInt || '무이자'}`, 공사비확보율: '사용자 입력(기본 50%)', 공사기간입력: nv(s3.build) != null ? '사용자 입력' : '미입력 → 기준(30층 미만 34개월, 30층 이상 34+(층수−29))',
     },
     summary: [
+      ...(ST.notice ? [['공고', `${ST.notice.title} — 토지대금 ${schedText(sched)} (개월차:비율%)${nv(s3.disc) ? ` · 선납할인 연 ${s3.disc}%` : ''}`, null]] : []),
       ['토지 분석', `${A1.zones.map(([z, a]) => `${z} ${f0(a)}㎡`).join(', ')} · 합계 ${f0(A1.total)}㎡ · 공시지가 합계 ${억(A1.priceSum / 1000)}`, null],
       ...A1.flags.slice(0, 4).map(t => ['규제·확인', t, /상한제|불가|저촉/.test(t) ? 'C55A11' : null]),
       ['설계개요', `${d.source} · 지상 ${f0(지상)}㎡ + 지하 ${f0(nv(d.지하))}㎡ = ${f0(nv(d.연면적))}㎡ · ${op ? '오피스텔' : '공동주택'} ${세대}${op ? '실' : '세대'}`, null],
       ...(capArea ? [['분양가', '분양가상한제 지역 — 상한 산정 시 택지비를 매입가로 가정(실제는 감정평가액)', 'C55A11']] : []),
     ],
-    sources: ['브이월드 토지특성·토지이용계획 (사용자 조회)', `설계개요: ${d.source}`, '분양가·공사비: 사용자 입력', '금융·기타비: 당사 표준 가정'],
+    sources: [...(ST.notice ? [`공고: ${ST.notice.title} (${ST.notice.org || ''})`] : []), '브이월드 토지특성·토지이용계획 (사용자 조회)', `설계개요: ${d.source}`, '분양가·공사비: 사용자 입력', '금융·기타비: 당사 표준 가정'],
   };
 }
 function runFs() {
@@ -314,6 +416,7 @@ function view1() {
     <td><button class="x" data-del="${i}" title="삭제">×</button></td></tr>`).join('');
   return `<section class="card">
     <h2>STEP 1. 토지 분석</h2>
+    ${ST.notice ? `<div class="consent"><b>공고에서 불러옴: <a href="${esc(ST.notice.url || '#')}" target="_blank" rel="noopener">${esc(ST.notice.title)}</a></b><small>공급가격·면적·건폐율·용적률·층수·세대수·계약일${ST.notice.fs ? '·토지대금 납부일정·선납할인·인허가기간(기존 사업성 분석)' : ''}을 채웠습니다. 다음 단계에서 설계개요 파일(가설계)을 올리세요.${ST.notice.noZone ? ' 공고에 용도지역이 없어 제3종일반주거지역으로 가정했습니다 — 용적률은 공고 값을 씁니다.' : ''}</small></div>` : ''}
     <p class="lead">사업 부지의 지번을 입력하면 브이월드에서 면적·지목·용도지역·공시지가와 토지이용계획(지역·지구·구역)을 조회해 개발 가능 규모와 확인할 규제를 정리합니다. 조회가 안 되면 표에 직접 입력하세요.</p>
     <div class="consent"><label><input type="checkbox" id="consent" ${ST.consent ? 'checked' : ''}> <b>입력값과 업로드 파일이 사이트 운영자에게 전송·보관되는 데 동의합니다.</b></label>
       <small>사업성 분석 품질 개선을 위한 데이터 수집 목적이며, 운영자 외에는 열람할 수 없습니다. 토지조서 원본(소유자 정보)은 보내지 않고 인식된 필지 정보만 전송합니다. 동의해야 진행할 수 있습니다.</small></div>
@@ -332,7 +435,7 @@ function view1() {
     ${A1.total > 0 ? `<div class="sum">
       <div class="kpis"><div><small>합계 면적</small><b>${f2(A1.total)}㎡</b><em>${f2(A1.total * PY)}평</em></div>
         <div><small>대표 용도지역</small><b>${esc(A1.main || '-')}</b><em>${A1.zones.length > 1 ? '복수 용도지역' : ''}</em></div>
-        <div><small>용적률 / 건폐율</small><b>${f0(A1.far)}% / ${f0(A1.bcr)}%</b><em>${esc(A1.src)}</em></div>
+        <div><small>용적률 / 건폐율</small><b>${f0(nv(ST.s1.far) ?? A1.far)}% / ${f0(nv(ST.s1.bcr) ?? A1.bcr)}%</b><em>${nv(ST.s1.far) != null ? (ST.notice ? '공고·지구단위계획 적용값' : '적용값 (직접 입력)') : esc(A1.src)}</em></div>
         <div><small>공시지가 합계</small><b>${억(A1.priceSum / 1000)}</b><em>${A1.total ? f0(A1.priceSum / A1.total / PY / 1e4) + '만원/평' : ''}</em></div></div>
       ${A1.flags.length ? `<ul class="flags">${A1.flags.map(t => `<li>${esc(t)}</li>`).join('')}</ul>` : ''}
       <div class="grid3">
@@ -363,7 +466,7 @@ function designTable(d) {
 }
 function view2() {
   const s2 = ST.s2, A1 = analyze();
-  const files = ST.files.map((f, i) => `<div class="file"><b>${esc(f.name)}</b> <span class="small">${(f.size / 1024).toFixed(0)}KB · ${{ pdf: 'PDF 텍스트 인식', xlsx: '엑셀 인식', scan: '스캔 PDF — 글자 인식 불가, 직접 입력', image: '이미지 — 참고용(직접 입력)', other: '지원하지 않는 형식' }[f.kind]}</span>
+  const files = ST.files.map((f, i) => `<div class="file"><b>${esc(f.name)}</b> <span class="small">${(f.size / 1024).toFixed(0)}KB · ${{ pdf: 'PDF 텍스트 인식', xlsx: '엑셀 인식', ocr: '스캔 PDF — 이미지 글자 인식(OCR), 숫자를 원문과 꼭 대조하세요', 'pdf+ocr': 'PDF 텍스트 + 이미지 글자 인식(OCR)', 'ocr-img': '이미지 글자 인식(OCR), 숫자를 원문과 꼭 대조하세요', scan: '스캔 PDF — 글자 인식 실패, 직접 입력', image: '이미지 — 글자 인식 실패, 직접 입력', other: '지원하지 않는 형식' }[f.kind]}${f.err ? ` <span class="err">${esc(f.err)}</span>` : ''}</span>
     ${f.md ? `<details><summary>변환된 마크다운 보기</summary><pre>${esc(f.md.slice(0, 30000))}</pre></details>` : ''}${f.url ? `<img src="${f.url}" alt="${esc(f.name)}" class="prev">` : ''}</div>`).join('');
   return `<section class="card">
     <h2>STEP 2. 설계개요</h2>
@@ -379,7 +482,7 @@ function view2() {
       </div>
       <label class="chk"><input type="checkbox" data-k="partial" data-o="s2" ${s2.partial ? 'checked' : ''}> 지하 마지막 층은 필요한 면적만 반영 (정수 층 올림 안 함)</label>
       <div class="row"><button class="btn" data-act="gen">설계개요 산출</button></div>`
-    : `<p class="lead">설계개요 PDF·엑셀(IM 포함)을 올리면 텍스트를 마크다운으로 바꿔 대지·연면적·층수·세대(실)·타입별 면적을 자동 인식합니다. <b>인식 결과는 아래 표에서 칸마다 고칠 수 있습니다.</b> 스캔 이미지 PDF는 글자 인식이 되지 않으니 직접 입력하세요.</p>
+    : `<p class="lead">설계개요 PDF·엑셀(IM 포함)을 올리면 텍스트를 마크다운으로 바꿔 대지·연면적·층수·세대(실)·타입별 면적을 자동 인식합니다. <b>인식 결과는 아래 표에서 칸마다 고칠 수 있습니다.</b> 스캔 PDF·이미지는 브라우저 안에서 글자 인식(OCR)으로 읽습니다 — 쪽당 10~20초, 숫자를 꼭 대조하세요.</p>
       <div class="drop"><input type="file" id="file" accept=".pdf,.xlsx,.xls,image/*" multiple><span>파일을 끌어다 놓거나 눌러서 선택 (PDF · 엑셀 · 이미지)</span></div>
       <div id="fstat" class="small"></div>${files}`}
     ${ST.design ? `<div class="sum"><h3>설계개요 확인 ${ST.design.source === '파일 인식' ? '<span class="chip hot">파일 인식 — 숫자를 원문과 대조하세요</span>' : `<span class="chip">${esc(ST.design.source)}</span>`}</h3>
@@ -394,6 +497,7 @@ function view3() {
   const n = d.types.reduce((a, t) => a + (nv(t.count) || 0), 0);
   return `<section class="card">
     <h2>STEP 3. 분양가 · 공사비 · 사업조건</h2>
+    ${s3.landType === '공공택지' && !op && !cap ? `<div class="warnbox">공공택지 공동주택은 분양가상한제 대상입니다. 분양가를 넣으면 그 값으로 계산하고, 엑셀 '분양가' 시트에서 상한 금액과 비교할 수 있습니다.</div>` : ''}
     ${cap ? `<div class="warnbox">분양가상한제 적용지역의 공동주택입니다. 분양가를 직접 넣어도 상한을 넘을 수 없으니, <b>시세 칸만 입력</b>하면 엑셀에서 MIN(상한제 상한, 시세×반영률)을 적용합니다(상한 산정 택지비는 매입가 가정).</div>` : ''}
     <h3>토지·일정</h3>
     <div class="grid3">
@@ -401,7 +505,9 @@ function view3() {
       ${field('토지 계약일', 'date', s3, { o: 's3', type: 'date' })}
       ${sel('택지 구분', 'landType', s3, ['민간택지', '공공택지'], { o: 's3', hint: '민간택지: 광역교통·학교용지·상하수도 부담금, 중개수수료 1% 반영' })}
       ${field('기존건축물 철거비', 'demol', s3, { o: 's3', unit: '억원', hint: '토지 컨디션별 — 없으면 비움' })}
-      ${field('인허가 기간 (계약→착공)', 'permit', s3, { o: 's3', unit: '개월', key: true })}
+      ${field('인허가 기간 (계약→착공)', 'permit', s3, { o: 's3', unit: '개월', key: true, hint: '설계 6 + 심의·승인 12~15 + 착공·분양 준비 2~4' })}
+      ${(() => { const sc = parseSched(s3.sched), tot = sc ? sc.reduce((a, x) => a + x[1], 0) : 0; return field('토지대금 납부일정 (개월차:비율%)', 'sched', s3, { o: 's3', type: 'text', hint: sc ? `합계 ${Math.round(tot * 1000) / 10}%${Math.abs(tot - 1) > 0.001 ? ' — 100%가 아닙니다' : ''} · 착공(인허가 기간) 이후 회차는 착공 때 선납` : '형식: 0:10, 18:8, 27:8 … (쉼표로 구분)' }); })()}
+      ${field('선납할인율 (연)', 'disc', s3, { o: 's3', unit: '%', hint: '공공택지 선납할인 — 없으면 0' })}
       ${(() => { const fl = nv(d.지상층) || 25, auto = fl < 30 ? 34 : 34 + fl - 29; return field('공사기간', 'build', s3, { o: 's3', unit: '개월', ph: String(auto), hint: `비우면 기준 적용: 지상 ${fl}층 → ${auto}개월 (30층 미만 34개월, 30층 이상 34+(층수−29))` }); })()}
     </div>
     <h3>분양가 (${op ? '오피스텔' : '공동주택'} ${n}${op ? '실' : '세대'})</h3>
@@ -512,7 +618,12 @@ async function handleFiles(files) {
     let best = null;
     for (const f of files) {
       const rec = await readFile(f); ST.files.push(rec);
-      if (rec.md) { const p = window.diyParse.parseDesignMd(rec.md); const score = Object.keys(p.values).length + p.types.length * 2; if (!best || score > best.score) best = { p, score }; }
+      const scoreOf = p => Object.keys(p.values).length + p.types.length * 2;
+      let p = rec.md ? window.diyParse.parseDesignMd(rec.md) : null;
+      if (rec.kind === 'pdf' && (!p || scoreOf(p) <= 4)) {   // 글자층이 있어도 설계개요 표가 이미지인 PDF → OCR로 한 번 더
+        try { await loadLib('pdf'); rec.md += '\n' + await ocrPdf(new Uint8Array(await f.arrayBuffer())); rec.kind = 'pdf+ocr'; p = window.diyParse.parseDesignMd(rec.md); } catch (e) { rec.err = 'OCR 실패: ' + e.message; }
+      }
+      if (p) { const score = scoreOf(p); if (!best || score > best.score) best = { p, score }; }
     }
     if (best && best.score > 2) { ST.design = fromParsed(best.p, analyze().total); ST.s2.checked = false; st.textContent = `인식 완료 — ${Object.keys(best.p.values).length}개 항목, 타입 ${best.p.types.length}개. 아래 표에서 숫자를 확인하세요.`; }
     else { st.textContent = '설계개요 숫자를 찾지 못했습니다. 생성기로 산출한 뒤 표에 직접 입력하세요.'; if (!ST.design) try { ST.design = generate(); ST.design.source = '직접 입력(생성기 초안)'; } catch (e) { /* STEP1 미완 */ } }
@@ -556,6 +667,7 @@ $('#load').onchange = async e => {
   const f = e.target.files[0]; if (!f) return;
   try { const o = JSON.parse(await f.text()); Object.assign(ST, o, { files: [], result: null, step: 1 }); render(); } catch (err) { alertBox('불러오기 실패: ' + err.message); }
 };
-fetch('data/diy_config.json?v=' + Date.now()).then(r => r.ok ? r.json() : {}).catch(() => ({})).then(c => { CFG = Object.assign(CFG, c || {}); render(); });
+fetch('data/diy_config.json?v=' + Date.now()).then(r => r.ok ? r.json() : {}).catch(() => ({})).then(c => { CFG = Object.assign(CFG, c || {}); render();
+  const nid = new URLSearchParams(location.search).get('notice'); if (nid) loadNotice(nid); });
 window.__diy = { ST, analyze, generate, specOf, runFs, fromParsed };
 })();

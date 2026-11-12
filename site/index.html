@@ -119,6 +119,7 @@ footer{color:var(--muted);font-size:12.5px;margin-top:18px;line-height:1.6}
   .card{grid-template-columns:minmax(0,1fr)}.right{text-align:left;display:flex;gap:12px;align-items:baseline;flex-wrap:wrap}
   .st{grid-template-columns:18px 1fr}.st .m{grid-column:2}
 }
+.diyl{grid-column:1/-1;display:flex;gap:10px;align-items:center;flex-wrap:wrap;font-size:14px;margin-top:4px}.diyl a{color:var(--accent);font-weight:700;text-decoration:none}.diyl a:hover{text-decoration:underline}
 </style>
 </head>
 <body>
@@ -379,6 +380,7 @@ function card(r){
       <div class="meta">${meta}</div><div class="chips">${chipsOf(r, arch)}</div></div>
     <div class="right">${right}</div>
     ${fsBlock(r)}
+    ${!arch && (r.area || r.sum) && !/건물|주택 >|아파트|차량|동산/.test(r.usage || '') ? `<div class="diyl"><a href="diy.html?notice=${encodeURIComponent(r.id)}">사업성 DIY로 분석 →</a><span class="small">공고 조건을 채운 뒤 설계개요(가설계)를 올려 계산</span></div>` : ''}
     ${r.sum ? sumPanel(r) : ''}
   </article>`;
 }
