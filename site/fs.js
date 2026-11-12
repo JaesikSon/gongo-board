@@ -20,6 +20,7 @@ function withDef(a) {
   if (a.근생분양기간 == null) o.근생분양기간 = o.분양기간;
   if (a.취득부대율 == null) o.취득부대율 = o.택지구분 === '민간택지' ? 0.01 : 0;
   if (a.선납할인율 == null) o.선납할인율 = 0;
+  if (a.주거분양평 == null) o.주거분양평 = '';
   // 토지대금 납부일정 [[개월차, 비율], …] — 없으면 계약률·할부간격·할부회차로 균등 분할
   if (!Array.isArray(a.토지일정) || !a.토지일정.length) {
     o.토지일정 = [[0, o.계약률]]; for (let k = 1; k <= o.할부회차; k++) o.토지일정.push([k * o.할부간격, (1 - o.계약률) / o.할부회차]);
@@ -34,7 +35,7 @@ function derive(a) {
   d.PFm = a.인허가기간;
   d.준공 = d.PFm + d.공기;
   d.용적면적 = a.대지 * a.용적률;
-  d.주거평 = d.용적면적 * (1 - a.근생비율) * PY;
+  d.주거평 = +a.주거분양평 > 0 ? +a.주거분양평 : d.용적면적 * (1 - a.근생비율) * PY;   // 설계 공급면적 합계 우선
   d.상가평 = d.용적면적 * a.근생비율 * PY;
   d.연면적 = a.설계연면적 ? a.설계연면적 : d.용적면적 * a.연면적배수;   // 설계개요 산출값 우선
   d.연면적평 = d.연면적 * PY;
@@ -462,8 +463,10 @@ function buildPLCF(wb, S, A, LAYOUT) {
   P('A16', '수입'); P('B16', '공동주택\n(분양)');
   const types = (Dg && Dg.타입 && Dg.타입.length) ? Dg.타입.slice(0, 3) : [{ name: '전체', count: null, w: 1 }];
   let wsum = 0;
+  const aOf = t => (t.sup || t.ex || 1) * (t.count || 0), aTot = types.reduce((x, t) => x + aOf(t), 0) || 1;
   types.forEach((t, i) => {
-    const r = 16 + i, w = i === types.length - 1 ? 1 - wsum : t.w; wsum += w;
+    const tw = t.w != null ? t.w : Math.round(aOf(t) / aTot * 1e6) / 1e6;   // 타입 면적 비중 (공급면적 우선)
+    const r = 16 + i, w = i === types.length - 1 ? 1 - wsum : tw; wsum += w;
     P(`C${r}`, t.ex ? `${t.name}(${t.ex}㎡)` : t.name); P(`D${r}`, t.count != null ? t.count : '=세대수');
     P(`G${r}`, `=주거평*${w}/D${r}`); P(`I${r}`, '=적용분양가/10'); P(`E${r}`, `=G${r}*I${r}*D${r}*10`); P(`J${r}`, `=G${r}*I${r}*10`); P(`F${r}`, `=E${r}/$E$27`);
     P(`K${r}`, '발코니 확장비 별도');
@@ -801,7 +804,8 @@ function build(ExcelJS, S, LAYOUT) {
       bInp(B, '주거용도', '주거 용도', '', '아파트 / 오피스텔 — 부담금·분양 조건 구분');
       bInp(B, '세대수', '세대(실) 수', '세대'); bInp(B, '근생비율', '근생 비율 (용적면적 대비)', '%');
       bCalc(B, '용적면적', '용적률 산정 면적', '대지*용적률', '㎡');
-      bCalc(B, '주거평', '주거 분양면적', '용적면적*(1-근생비율)*0.3025', '평');
+      bInp(B, '주거분양평', '주거 공급면적 합계 (설계값)', '평', '비우면 용적면적 기준');
+      bCalc(B, '주거평', '주거 분양면적', 'IF(ISNUMBER(주거분양평),주거분양평,용적면적*(1-근생비율)*0.3025)', '평');
       bCalc(B, '상가평', '상가 분양면적', '용적면적*근생비율*0.3025', '평');
       bCalc(B, '연면적평', '전체 연면적', 'IF(ISNUMBER(설계연면적),설계연면적,용적면적*연면적배수)*0.3025', '평');
       bCalc(B, '지하면적', '지하 연면적', 'MAX(0,IF(ISNUMBER(설계연면적),설계연면적,용적면적*연면적배수)-용적면적)', '㎡'); },
