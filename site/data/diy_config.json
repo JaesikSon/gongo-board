@@ -1,5 +1,5 @@
 {
   "collectUrl": "",
-  "vworldKey": "",
+  "vworldKey": "8B8902D0-D573-49DF-B479-75C1D1C7A129",
   "note": "collectUrl: 운영자 Google Apps Script 웹앱 주소(사업성 DIY 입력값·파일 수집). vworldKey: 브이월드 인증키(서비스 URL에 jaesikson.github.io 등록) — 운영자가 직접 입력"
 }
