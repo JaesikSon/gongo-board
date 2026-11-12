@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>사업성 DIY</title>
+<meta name="description" content="지번·설계개요·분양가만 넣으면 사업성 엑셀을 만들어 주는 단계별 입력 도구">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#f6f5f1; --panel:#ffffff; --ink:#1d1f22; --muted:#6b6f76; --line:#e4e2dc;
+  --accent:#1f5f4a; --accent-soft:#e3efe9; --warn:#b3452b; --warn-soft:#f8e6e0;
+  --new:#2b59c3; --new-soft:#e5ecfb; --chip:#efeee9; --key:#fde9d9; --inp:#fff8e1;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){--bg:#141517;--panel:#1c1e21;--ink:#e9e8e4;--muted:#9a9ea5;--line:#2c2f33;
+  --accent:#6fc2a2;--accent-soft:#1f3029;--warn:#f08a70;--warn-soft:#3a241e;--new:#8fb0ff;--new-soft:#1f2740;--chip:#26292d;--key:#3a2a1e;--inp:#2e2a1c}
+}
+:root[data-theme="dark"]{--bg:#141517;--panel:#1c1e21;--ink:#e9e8e4;--muted:#9a9ea5;--line:#2c2f33;
+  --accent:#6fc2a2;--accent-soft:#1f3029;--warn:#f08a70;--warn-soft:#3a241e;--new:#8fb0ff;--new-soft:#1f2740;--chip:#26292d;--key:#3a2a1e;--inp:#2e2a1c}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.55 "Noto Sans KR",system-ui,sans-serif}
+a{color:inherit}
+header{padding:28px 20px 6px;max-width:1180px;margin:0 auto}
+h1{font-size:24px;margin:0 0 4px;letter-spacing:-.02em}
+.sub{color:var(--muted);font-size:14px}
+.wrap{max-width:1180px;margin:0 auto;padding:0 20px 60px}
+.tabs{display:flex;gap:6px;margin:14px 0 12px;flex-wrap:wrap}
+.tab{border:1px solid var(--line);background:var(--panel);padding:8px 14px;border-radius:999px;cursor:pointer;font:inherit;color:var(--ink);text-decoration:none}
+.tab[aria-pressed=true]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+#stepper{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin:6px 0 14px}
+#stepper i{color:var(--muted);font-style:normal}
+.st{display:flex;flex-direction:column;align-items:flex-start;border:1px solid var(--line);background:var(--panel);border-radius:10px;padding:8px 14px;cursor:pointer;font:inherit;color:var(--muted);min-width:132px}
+.st b{font-size:12px;letter-spacing:.04em}
+.st span{font-size:14.5px;color:var(--ink)}
+.st.on{border-color:var(--accent);background:var(--accent-soft);color:var(--accent)}
+.st.on span{font-weight:700}
+.st.done{color:var(--accent)}
+.st.done b::after{content:" ✓"}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:20px 22px}
+h2{font-size:19px;margin:0 0 6px;display:flex;gap:8px;align-items:center}
+h3{font-size:15.5px;margin:20px 0 8px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.lead{color:var(--muted);margin:0 0 14px}
+.small{font-size:13px;color:var(--muted)}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+.fld{display:flex;flex-direction:column;gap:4px;font-size:13.5px;color:var(--muted)}
+.fld .inp{display:flex;align-items:center;gap:6px}
+.fld input,.fld select,.fld textarea,.row input{width:100%;padding:9px 10px;border:1px solid var(--line);border-radius:8px;background:var(--inp);color:var(--ink);font:inherit;font-size:14.5px}
+.fld.key input,.fld.key select{background:var(--key);font-weight:700}
+.fld em{font-style:normal;color:var(--muted);white-space:nowrap;font-size:13px}
+.fld small{font-size:12px}
+.req{color:var(--warn)}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:12px 0}
+.btn{border:1px solid var(--ink);background:var(--ink);color:var(--bg);border-radius:9px;padding:9px 16px;font:inherit;font-size:14.5px;cursor:pointer}
+.btn.ghost{background:transparent;color:var(--ink);border-color:var(--line)}
+.btn.sm{padding:5px 10px;font-size:13px}
+.btn.big{padding:12px 22px;font-size:15.5px;font-weight:700}
+.btn:disabled{opacity:.5;cursor:wait}
+.nav{display:flex;justify-content:space-between;margin-top:22px;padding-top:14px;border-top:1px solid var(--line)}
+.consent{background:var(--new-soft);border-radius:10px;padding:10px 14px;margin:0 0 14px;display:flex;flex-direction:column;gap:2px}
+.consent label{cursor:pointer}
+.consent small{color:var(--muted)}
+details.key summary{cursor:pointer;color:var(--muted);font-size:13.5px}
+details.key .row{margin:6px 0}
+.tw{overflow-x:auto}
+table.pt{border-collapse:collapse;width:100%;font-size:13.5px;font-variant-numeric:tabular-nums}
+table.pt th,table.pt td{padding:6px 8px;border-bottom:1px solid var(--line);text-align:left;vertical-align:middle}
+table.pt th{background:var(--chip);font-weight:500;color:var(--muted);white-space:nowrap}
+table.pt td.wrap{min-width:220px}
+table.pt input,table.pt select{width:100%;min-width:72px;padding:5px 7px;border:1px solid var(--line);border-radius:6px;background:var(--inp);color:var(--ink);font:inherit;font-size:13.5px}
+table.kv th{width:46%}
+table.kv td{display:flex;gap:6px;align-items:center}
+table.kv td em{font-style:normal;color:var(--muted);font-size:12.5px;min-width:22px}
+td.rec input{border:2px solid var(--new)}
+.x{border:0;background:none;color:var(--muted);font-size:18px;cursor:pointer}
+.chip{background:var(--chip);border-radius:6px;padding:1px 7px;font-size:12.5px;color:var(--muted);display:inline-block;margin:1px 3px 1px 0}
+.chip.win{background:var(--accent-soft);color:var(--accent);font-weight:700}
+.chip.hot{background:var(--warn-soft);color:var(--warn);font-weight:500}
+.err{color:var(--warn);font-size:12.5px}
+.sum{margin-top:16px;border-top:1px dashed var(--line);padding-top:14px}
+.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:6px 0 10px}
+.kpis div{background:var(--bg);border-radius:10px;padding:10px 12px;display:flex;flex-direction:column}
+.kpis small{color:var(--muted);font-size:12.5px}
+.kpis b{font-size:18px;font-variant-numeric:tabular-nums}
+.kpis em{font-style:normal;color:var(--muted);font-size:12.5px}
+.flags{margin:8px 0;padding-left:18px;font-size:13.5px}
+.flags li{margin:2px 0}
+.warnbox{background:var(--warn-soft);color:var(--warn);border-radius:10px;padding:10px 14px;margin:0 0 12px;font-size:14px}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:10px;overflow:hidden;margin:4px 0 12px}
+.seg button{border:0;background:var(--panel);padding:8px 14px;font:inherit;color:var(--muted);cursor:pointer}
+.seg button.on{background:var(--ink);color:var(--bg)}
+.seg.sm button{padding:6px 12px;font-size:13.5px}
+.drop{position:relative;border:2px dashed var(--line);border-radius:12px;padding:26px;text-align:center;color:var(--muted)}
+.drop.over{border-color:var(--accent);background:var(--accent-soft)}
+.drop input{position:absolute;inset:0;opacity:0;cursor:pointer}
+.file{border:1px solid var(--line);border-radius:10px;padding:8px 12px;margin-top:8px}
+.file pre{max-height:320px;overflow:auto;background:var(--bg);padding:10px;border-radius:8px;font-size:12px;white-space:pre-wrap}
+.file img.prev{max-width:100%;max-height:420px;margin-top:6px;border-radius:8px}
+.chk{display:flex;gap:8px;align-items:center;margin:10px 0;font-size:14px;cursor:pointer}
+.chk.confirm{background:var(--accent-soft);border-radius:10px;padding:10px 12px}
+.tools{display:flex;gap:8px;align-items:center;justify-content:flex-end;font-size:13px;color:var(--muted)}
+.tools label{cursor:pointer;text-decoration:underline}
+.tools input{display:none}
+#toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%) translateY(20px);background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:10px;opacity:0;transition:.25s;pointer-events:none;font-size:14px;max-width:90vw}
+#toast.on{opacity:1;transform:translateX(-50%)}
+@media (max-width:760px){.grid2,.grid3,.kpis{grid-template-columns:1fr}.st{min-width:0;flex:1}#stepper i{display:none}.card{padding:16px}}
+</style>
+</head>
+<body>
+<header>
+  <h1>공공택지 개발용지 공고</h1>
+  <div class="sub">사업성 DIY — 지번 · 설계개요 · 분양가만 넣으면 사업성 엑셀을 만들어 드립니다</div>
+</header>
+<div class="wrap">
+  <div class="tabs" role="group" aria-label="구분">
+    <a class="tab" href="./">공고 목록</a>
+    <a class="tab" href="diy.html" aria-pressed="true">사업성 DIY</a>
+  </div>
+  <div class="tools"><label for="load">작업 불러오기(JSON)</label><input type="file" id="load" accept=".json"></div>
+  <nav id="stepper" aria-label="진행 단계"></nav>
+  <div id="panel"></div>
+</div>
+<div id="toast" role="status"></div>
+<script src="design.js?v=20261112"></script>
+<script src="fs.js?v=20261112"></script>
+<script src="diy-parse.js?v=20261112"></script>
+<script src="diy.js?v=20261112"></script>
+</body>
+</html>

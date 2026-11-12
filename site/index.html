@@ -132,6 +132,7 @@ footer{color:var(--muted);font-size:12.5px;margin-top:18px;line-height:1.6}
     <button class="tab" data-tab="물건" aria-pressed="false">온비드 대형토지<span class="n" id="n-thing"></span></button>
     <button class="tab" data-tab="공고" aria-pressed="false">LH·SH·공사 공급공고<span class="n" id="n-notice"></span></button>
     <button class="tab" data-tab="arch" aria-pressed="false">종료·낙찰<span class="n" id="n-arch"></span></button>
+    <a class="tab" href="diy.html" style="text-decoration:none">사업성 DIY</a>
   </div>
 
   <div class="filters">
@@ -443,7 +444,7 @@ async function load(){
 function setTab(t, r=true){
   const was = isArch();
   tab = t; shown = PAGE;
-  document.querySelectorAll('.tab').forEach(b => b.setAttribute('aria-pressed', b.dataset.tab === t));
+  document.querySelectorAll('.tab[data-tab]').forEach(b => b.setAttribute('aria-pressed', b.dataset.tab === t));
   if (isArch() !== was) {
     $('#sort').value = isArch() ? 'recent' : 'end';
     if (isArch() && !ARCH) loadArchive();
@@ -451,7 +452,7 @@ function setTab(t, r=true){
   }
   if (r) render();
 }
-document.querySelectorAll('.tab').forEach(b => b.onclick = () => setTab(b.dataset.tab));
+document.querySelectorAll('.tab[data-tab]').forEach(b => b.onclick = () => setTab(b.dataset.tab));
 let timer;
 ['q','pmin','pmax','amin','amax'].forEach(id => $('#'+id).addEventListener('input', () => { clearTimeout(timer); timer = setTimeout(() => { shown = PAGE; render(); }, 180); }));
 ['sido','ot','cat','zone','jimok','punit','aunit','anull','sort','res','onlyNew','soon','hidePvct'].forEach(id => $('#'+id).addEventListener('change', () => { shown = PAGE; render(); }));
