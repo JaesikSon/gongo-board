@@ -27,7 +27,7 @@ const ST = {
   parcels: [], s1: { donate: 0, far: null, bcr: null, height: null, sido: '' },
   s2: { mode: 'gen', use: '공동주택', commPct: 0, floors: 25, perFloor: 4, hh: null, opEx: 84, stall: 35, partial: false, checked: false },
   design: null, files: [], land: null,
-  s3: { land: null, date: '', permit: 12, sale: null, rate: 100, priceMode: 'unit', price: null, mkt: null, mktRatio: 85, comm: null, cost: null, cover: 50, pfRate: 4.6, blRate: 6.0, blRate2: 8.0, build: null, landType: '민간택지', trust: '관리형토지신탁', midInt: '무이자', demol: null, sched: '0:10, 3:90', disc: 0 },
+  s3: { land: null, date: '', permit: 12, sale: null, rate: 100, priceMode: 'py', price: null, mkt: null, mktRatio: 85, comm: null, cost: null, cover: 50, pfRate: 4.6, blRate: 6.0, blRate2: 8.0, build: null, landType: '민간택지', trust: '관리형토지신탁', midInt: '무이자', demol: null, sched: '0:10, 3:90', disc: 0 },
   notice: null,
   result: null,
 };
@@ -322,8 +322,7 @@ function specOf() {
   const 근생비율 = 지상 ? commSup / 지상 : 0, 주거평 = 지상 * (1 - 근생비율) * PY;
   const supTot = types.reduce((a, t) => a + (nv(t.sup) || nv(t.ex)) * nv(t.count), 0);
   let 주거총 = null;   // 천원 (발코니 제외)
-  if (s3.priceMode === 'unit' && nv(s3.price)) 주거총 = nv(s3.price) * 1e5 * 세대;
-  if (s3.priceMode === 'py' && nv(s3.price)) 주거총 = nv(s3.price) * 10 * supTot * PY;
+  if (nv(s3.price)) 주거총 = nv(s3.price) * 10 * supTot * PY;   // 공급평당 분양가 × 공급면적 (세대당 가격은 자동 계산)
   const op = d.use === '오피스텔';
   const unitPrice = 주거총 ? 주거총 / 세대 : (nv(s3.mkt) || 0) * 10 * (supTot / 세대) * PY * (nv(s3.mktRatio) || 85) / 100;
   const sched = parseSched(s3.sched) || [[0, 0.1], [3, 0.9]];
@@ -334,7 +333,7 @@ function specOf() {
     공급가격: Math.round(nv(s3.land) * 1e5), 계약일: s3.date || new Date(Date.now() + 30 * 864e5).toISOString().slice(0, 10),
     인허가기간: nv(s3.permit) || 12, 공사기간입력: nv(s3.build) != null ? nv(s3.build) : '', 분양기간: nv(s3.sale), 분양률: (nv(s3.rate) || 100) / 100,
     분양가입력: 주거총 ? 주거총 / (allSup ? supTot * PY : 주거평) : '', 시세: nv(s3.mkt) ? nv(s3.mkt) * 10 * (supTot / 세대 * PY) / (주거평 / 세대) : 0, 시세반영률: (nv(s3.mktRatio) || 85) / 100,
-    상가시세: d.comm && nv(s3.comm) ? nv(s3.comm) * 10 * (nv(d.comm.con) || commSup) * PY / (commSup * PY) : 0,
+    상가시세: d.comm && nv(s3.comm) ? nv(s3.comm) * 10 * (nv(d.comm.ex) || commSup * 0.85) / commSup : 0,   // 근생: 전용평당 입력 → 엔진 공급평당 환산
     공사비평당: nv(s3.cost) * 10, 공사비확보율: (nv(s3.cover) || 50) / 100,
     PF선순위금리: (nv(s3.pfRate) || 4.6) / 100, BL선순위금리: (nv(s3.blRate) || 6) / 100, BL후순위금리: (nv(s3.blRate2) != null ? nv(s3.blRate2) : (nv(s3.blRate) || 6) + 2) / 100,
     택지구분: s3.landType || '민간택지', 주거용도: op ? '오피스텔' : '아파트', 신탁유형: s3.trust || '관리형토지신탁', 신탁: 300000,
@@ -354,7 +353,7 @@ function specOf() {
     site: { addr: ST.parcels.map(p => p.addr || p.q).join(', '), zone: A1.zones.map(([z]) => z).join(', ') + (A1.flags.some(f => /지구단위/.test(f)) ? ', 지구단위계획구역' : '') },
     notes: {
       대지: `사업 대지(기부채납 후) — ${d.source}`, 용적률: '설계개요 지상 연면적 ÷ 대지', 설계연면적: `${d.source}: 지상+지하`,
-      분양가입력: 주거총 ? (s3.priceMode === 'unit' ? `세대(실)당 ${s3.price}억 × ${세대}` : `공급평당 ${s3.price}만원`) + ' → 주거 지상면적 평당 환산' : '시세×반영률 / 상한제 상한 중 낮은 값',
+      분양가입력: 주거총 ? `공급평당 ${s3.price}만원 (세대당 = 타입별 공급평 × 평당가)` : '시세×반영률 / 상한제 상한 중 낮은 값', 상가시세: d.comm && nv(s3.comm) ? `근생 전용평당 ${s3.comm}만원 → 공급평당 환산` : '',
       시세: nv(s3.mkt) ? `인근 시세 공급평당 ${s3.mkt}만원(사용자 조사)` : '', 공사비평당: `사용자 입력 ${s3.cost}만원/평`, 분양기간: `${s3.sale}개월 ${s3.rate}% (사용자 입력)`,
       인허가기간: '사용자 입력', 선납할인율: nv(s3.disc) ? `선납일수 × 연 ${s3.disc}% (공고 조건)` : '', 주거분양평: allSup ? '설계개요 타입별 공급면적 합계' : '',
       공급가격: ST.notice ? `공고 공급가격(기준가) — ${ST.notice.title}` : '사용자 입력 토지 매입가', 택지구분: `사용자 선택: ${s3.landType || '민간택지'}`, 신탁유형: `사용자 선택: ${s3.trust || '관리형토지신탁'}`, 중도금이자방식: `사용자 선택: ${s3.midInt || '무이자'}`, 공사비확보율: '사용자 입력(기본 50%)', 공사기간입력: nv(s3.build) != null ? '사용자 입력' : '미입력 → 기준(30층 미만 34개월, 30층 이상 34+(층수−29))',
@@ -513,6 +512,20 @@ function view2() {
       <label class="chk confirm"><input type="checkbox" id="checked" ${s2.checked ? 'checked' : ''}> <b>설계개요 숫자를 확인했습니다</b> (다음 단계 진행 조건)</label></div>` : ''}
     ${nav(true, true)}</section>`;
 }
+// 타입별 세대(실)당 분양가 자동 계산 (공급평당 분양가 × 타입 공급평)
+function unitPriceHtml() {
+  const d = ST.design, s3 = ST.s3; if (!d) return '';
+  const op = d.use === '오피스텔', px = nv(s3.price) || (nv(s3.mkt) ? nv(s3.mkt) * (nv(s3.mktRatio) || 85) / 100 : null);
+  if (!px) return '<p class="small">공급평당 분양가(또는 시세)를 넣으면 타입별 세대당 분양가가 자동 계산됩니다.</p>';
+  const types = d.types.filter(t => nv(t.count) > 0); let tot = 0, n = 0;
+  const rows = types.map(t => { const py = (nv(t.sup) || nv(t.ex)) * PY, u = px * py / 1e4; tot += u * nv(t.count); n += nv(t.count);
+    return `<tr><td>${esc(t.name)}</td><td>${f2(nv(t.ex))}㎡</td><td>${f2(py)}평</td><td>${f0(nv(t.count))}</td><td><b>${u.toFixed(2)}억</b></td><td>${f0(u * nv(t.count))}억</td></tr>`; }).join('');
+  const c = d.comm && nv(s3.comm) ? (nv(d.comm.ex) || nv(d.comm.sup) * 0.85) * PY * nv(s3.comm) / 1e4 : 0;
+  return `<h3>${op ? '실당' : '세대당'} 분양가 (자동 계산 · ${nv(s3.price) ? '공급평당 ' + f0(px) : '시세×반영률 ' + f0(px)}만원/평${!nv(s3.price) && s3.landType === '공공택지' ? ', 상한제 상한과 비교해 낮은 값 적용' : ''})</h3>
+    <div class="tw"><table class="pt"><thead><tr><th>타입</th><th>전용</th><th>공급</th><th>${op ? '실' : '세대'}수</th><th>${op ? '실당' : '세대당'} 분양가</th><th>매출</th></tr></thead><tbody>${rows}
+    <tr><th>합계</th><th></th><th></th><th>${f0(n)}</th><th>평균 ${n ? (tot / n).toFixed(2) : '-'}억</th><th>${f0(tot)}억</th></tr>${c ? `<tr><td>근생</td><td colspan="3">전용평당 ${f0(nv(s3.comm))}만원</td><td></td><td>${f0(c)}억</td></tr>` : ''}</tbody></table></div>
+    <p class="small">발코니 확장비 별도 · ${op ? '오피스텔은 공급면적이 없으면 전용면적 기준' : '공급면적 = 전용 + 주거공용'}</p>`;
+}
 function view3() {
   const s3 = ST.s3, d = ST.design, A1 = analyze(), op = d.use === '오피스텔';
   const cap = A1.flags.some(f => /분양가상한제/.test(f)) && !op;
@@ -533,16 +546,16 @@ function view3() {
       ${(() => { const fl = nv(d.지상층) || 25, auto = fl < 30 ? 34 : 34 + fl - 29; return field('공사기간', 'build', s3, { o: 's3', unit: '개월', ph: String(auto), hint: `비우면 기준 적용: 지상 ${fl}층 → ${auto}개월 (30층 미만 34개월, 30층 이상 34+(층수−29))` }); })()}
     </div>
     <h3>분양가 (${op ? '오피스텔' : '공동주택'} ${n}${op ? '실' : '세대'})</h3>
-    <div class="seg sm"><button class="${s3.priceMode === 'unit' ? 'on' : ''}" data-pm="unit">${op ? '실당' : '세대당'} 분양가</button><button class="${s3.priceMode === 'py' ? 'on' : ''}" data-pm="py">공급평당 분양가</button></div>
     <div class="grid3">
-      ${field(s3.priceMode === 'unit' ? (op ? '실당 분양가' : '세대당 분양가') : '공급평당 분양가', 'price', s3, { o: 's3', unit: s3.priceMode === 'unit' ? '억원' : '만원/평', key: true, hint: '없으면 비워 두고 시세 입력' })}
+      ${field('공급평당 분양가', 'price', s3, { o: 's3', unit: '만원/평', key: true, hint: '없으면 비워 두고 시세 입력' })}
       ${field('인근 시세 (공급평당, 자체 조사)', 'mkt', s3, { o: 's3', unit: '만원/평', hint: '분양가가 없을 때 시세×반영률 적용' })}
       ${field('시세 반영률', 'mktRatio', s3, { o: 's3', unit: '%' })}
-      ${d.comm ? field('근생 분양가 (계약평당)', 'comm', s3, { o: 's3', unit: '만원/평' }) : ''}
+      ${d.comm ? field('근생 분양가 (전용평당)', 'comm', s3, { o: 's3', unit: '만원/평', hint: `근생 전용 ${f2((nv(d.comm.ex) || nv(d.comm.sup) * 0.85) * PY)}평` }) : ''}
       ${field('분양기간', 'sale', s3, { o: 's3', unit: '개월', req: true, key: true, hint: '반드시 입력' })}
       ${field('분양률', 'rate', s3, { o: 's3', unit: '%' })}
       ${sel('중도금 이자 방식', 'midInt', s3, ['무이자', '후불제'], { o: 's3', hint: '무이자 = 시행사 부담 / 후불제 = 수분양자 부담' })}
     </div>
+    <div id="unitp">${unitPriceHtml()}</div>
     <h3>공사비·금융</h3>
     <div class="grid3">
       ${field('공사비 (연면적 평당)', 'cost', s3, { o: 's3', unit: '만원/평', req: true, key: true, hint: '지방 중층 600~750 · 수도권 고층 800~1,000' })}
@@ -583,7 +596,7 @@ function bind() {
   $$('.cell').forEach(el => el.addEventListener('change', () => { ST.parcels[+el.dataset.pi][el.dataset.pk] = el.dataset.pk === 'zone' ? el.value : nv(el.value); later(); }));
   $$('[data-del]').forEach(b => b.onclick = () => { ST.parcels.splice(+b.dataset.del, 1); later(); });
   $$('[data-mode]').forEach(b => b.onclick = () => { ST.s2.mode = b.dataset.mode; later(); });
-  $$('[data-pm]').forEach(b => b.onclick = () => { ST.s3.priceMode = b.dataset.pm; ST.s3.price = null; later(); });
+    ['price', 'mkt', 'mktRatio', 'comm'].forEach(k => { const el = $(`[data-k=${k}][data-o=s3]`); if (el) el.addEventListener('input', () => { const u = $('#unitp'); if (u) u.innerHTML = unitPriceHtml(); }); });
   $$('.dz').forEach(el => el.addEventListener('change', () => { ST.design[el.dataset.dk] = nv(el.value); ST.s2.checked = false; later(); }));
   $$('.dt').forEach(el => el.addEventListener('change', () => { const t = ST.design.types[+el.dataset.ti]; t[el.dataset.tk] = /name|use/.test(el.dataset.tk) ? el.value : nv(el.value); if (el.dataset.tk === 'use') ST.design.use = ST.design.types.some(x => x.use === '오피스텔') ? '오피스텔' : '공동주택'; ST.s2.checked = false; later(); }));
   $$('.dc').forEach(el => el.addEventListener('change', () => { ST.design.comm = ST.design.comm || {}; ST.design.comm[el.dataset.ck] = nv(el.value); if (!nv(ST.design.comm.sup)) ST.design.comm = null; ST.s2.checked = false; later(); }));
@@ -690,7 +703,10 @@ async function act(a, btn) {
 function alertBox(msg) { const b = $('#toast'); b.textContent = msg; b.classList.add('on'); clearTimeout(alertBox.t); alertBox.t = setTimeout(() => b.classList.remove('on'), 3500); }
 $('#load').onchange = async e => {
   const f = e.target.files[0]; if (!f) return;
-  try { const o = JSON.parse(await f.text()); Object.assign(ST, o, { files: [], result: null, step: 1 }); render(); } catch (err) { alertBox('불러오기 실패: ' + err.message); }
+  try { const o = JSON.parse(await f.text()); Object.assign(ST, o, { files: [], result: null, step: 1 });
+    if (ST.s3.priceMode === 'unit') { const ts = ((ST.design || {}).types || []).filter(t => nv(t.count) > 0), sp = ts.reduce((a, t) => a + (nv(t.sup) || nv(t.ex)) * nv(t.count), 0) * PY, n = ts.reduce((a, t) => a + nv(t.count), 0);
+      ST.s3.price = nv(ST.s3.price) && sp ? Math.round(nv(ST.s3.price) * 1e4 * n / sp) : null; ST.s3.priceMode = 'py'; }   // 예전 세대당 입력 → 공급평당 환산
+    render(); } catch (err) { alertBox('불러오기 실패: ' + err.message); }
 };
 fetch('data/diy_config.json?v=' + Date.now()).then(r => r.ok ? r.json() : {}).catch(() => ({})).then(c => { CFG = Object.assign(CFG, c || {}); render();
   const nid = new URLSearchParams(location.search).get('notice'); if (nid) loadNotice(nid); });
