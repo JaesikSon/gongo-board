@@ -307,8 +307,8 @@ function view1() {
     <div class="consent"><label><input type="checkbox" id="consent" ${ST.consent ? 'checked' : ''}> <b>입력값과 업로드 파일이 사이트 운영자에게 전송·보관되는 데 동의합니다.</b></label>
       <small>사업성 분석 품질 개선을 위한 데이터 수집 목적이며, 운영자 외에는 열람할 수 없습니다. 동의해야 진행할 수 있습니다.</small></div>
     <div class="grid2">
-      ${field('사업명', 'title', ST, { o: 'root', type: 'text', ph: '예) 용산 문배동 오피스텔' })}
-      <label class="fld"><span>지번 (한 줄에 하나, 합필 가능)</span><textarea id="jibun" rows="3" placeholder="서울특별시 용산구 문배동 11-22&#10;서울특별시 용산구 문배동 11-21">${esc(ST.parcels.map(p => p.q).join('\n'))}</textarea></label>
+      ${field('사업명', 'title', ST, { o: 'root', type: 'text', ph: '예) ○○동 주상복합' })}
+      <label class="fld"><span>지번 (한 줄에 하나, 합필 가능)</span><textarea id="jibun" rows="3" placeholder="○○시 ○○구 ○○동 123-4&#10;○○시 ○○구 ○○동 123-5">${esc(ST.parcels.map(p => p.q).join('\n'))}</textarea></label>
     </div>
     <div class="row"><button class="btn" data-act="lookup">토지 조회</button><button class="btn ghost" data-act="addrow">직접 입력 행 추가</button>
       <details class="key"><summary>브이월드 인증키 ${vkey() ? '(설정됨)' : '(미설정)'}</summary><div class="row"><input id="vkey" placeholder="인증키 입력 — 이 브라우저에만 저장" value=""><button class="btn ghost" data-act="savekey">저장</button></div><small>vworld.kr → 오픈API → 인증키 발급(서비스 URL: ${location.hostname}). 운영자 설정 키가 있으면 자동 사용.</small></details></div>
