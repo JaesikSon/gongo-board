@@ -24,7 +24,7 @@ const ST = {
   parcels: [], s1: { donate: 0, far: null, bcr: null, height: null, sido: '' },
   s2: { mode: 'gen', use: '공동주택', commPct: 0, floors: 25, perFloor: 4, hh: null, opEx: 84, stall: 35, partial: false, checked: false },
   design: null, files: [],
-  s3: { land: null, date: '', permit: 12, sale: null, rate: 100, priceMode: 'unit', price: null, mkt: null, mktRatio: 85, comm: null, cost: null, cover: 50, pfRate: 4.6, blRate: 6.0 },
+  s3: { land: null, date: '', permit: 12, sale: null, rate: 100, priceMode: 'unit', price: null, mkt: null, mktRatio: 85, comm: null, cost: null, cover: 50, pfRate: 4.6, blRate: 6.0, blRate2: 8.0, build: null, landType: '민간택지', trust: '관리형토지신탁', midInt: '무이자', demol: null },
   result: null,
 };
 
@@ -60,7 +60,7 @@ async function lookupParcel(q) {
   const it = s && s.response && s.response.result && arr(s.response.result.items)[0];
   if (!it) throw new Error((s && s.response && s.response.error && s.response.error.text) || '지번을 찾지 못했습니다');
   const pnu = it.id, addr = (it.address && (it.address.parcel || it.address.road)) || q;
-  const c = await vw(`https://api.vworld.kr/ned/data/getLandCharacteristics?key=${key}&domain=${dom}&pnu=${pnu}&format=json&numOfRows=10&pageNo=1`);
+  const c = await vw(`https://api.vworld.kr/ned/data/getLandCharacteristics?key=${key}&domain=${dom}&pnu=${pnu}&format=json&numOfRows=100&pageNo=1`);
   const rows = arr(c && c.landCharacteristicss && c.landCharacteristicss.field).sort((a, b) => String(b.stdrYear).localeCompare(String(a.stdrYear)));
   const r0 = rows[0] || {};
   let uses = [];
@@ -194,7 +194,7 @@ const DIY_DEF = {
   계약률: 0.1, 할부간격: 3, 할부회차: 1, 할부이자율: 0, 취득세등기: 0.048, 재산세율: 0.0048, 계약금비율: 0.1, 중도금비율: 0.6, 잔금비율: 0.3,
   인입_평당: 20, 설계_평당: 55, 감리_평당: 110, 표준건축비: 2392, 미술률: 0.001, 용역비: 1000000, 지역난방_m2: 14.04, 기타부담금: 500000, 광고률: 0.005,
   MH: 2200000, MH운영: 30000, 분양수수료: 3000, 분양보증률: 0.0029, 보존등기률: 0.032, 신탁: 250000, 관리비_월: 30000, 입주관리: 1000, 예비비률: 0.0035, 기타비기준: 0.28,
-  BL선순위비중: 0.64, BL선순위취급: 0.005, BL후순위취급: 0.03, BL자문: 0.01, PF보증률: 0.00848, 최소현금: 500000, Equity입력: '', 목표이익률: 0.1, 공사비확보율: 0.5,
+  BL선순위비중: 0.64, BL선순위취급: 0.005, BL후순위취급: 0.03, BL자문: 0.005, PF자문: 0.005, PF보증률: 0.00848, 최소현금: 500000, Equity입력: '', 목표이익률: 0.1, 공사비확보율: 0.5,
 };
 function specOf() {
   const d = ST.design, s3 = ST.s3, A1 = analyze();
@@ -211,11 +211,14 @@ function specOf() {
   const A = Object.assign({}, DIY_DEF, {
     대지, 용적률: 지상 / 대지, 근생비율, 세대수: 세대, 층수: nv(d.지상층) || 25, 설계연면적: nv(d.연면적),
     공급가격: Math.round(nv(s3.land) * 1e5), 계약일: s3.date || new Date(Date.now() + 30 * 864e5).toISOString().slice(0, 10),
-    인허가기간: nv(s3.permit) || 12, 분양기간: nv(s3.sale), 분양률: (nv(s3.rate) || 100) / 100,
+    인허가기간: nv(s3.permit) || 12, 공사기간입력: nv(s3.build) != null ? nv(s3.build) : '', 분양기간: nv(s3.sale), 분양률: (nv(s3.rate) || 100) / 100,
     분양가입력: 주거총 ? 주거총 / 주거평 : '', 시세: nv(s3.mkt) ? nv(s3.mkt) * 10 * (supTot / 세대 * PY) / (주거평 / 세대) : 0, 시세반영률: (nv(s3.mktRatio) || 85) / 100,
     상가시세: d.comm && nv(s3.comm) ? nv(s3.comm) * 10 * (nv(d.comm.con) || commSup) * PY / (commSup * PY) : 0,
     공사비평당: nv(s3.cost) * 10, 공사비확보율: (nv(s3.cover) || 50) / 100,
-    PF선순위금리: (nv(s3.pfRate) || 4.6) / 100, BL선순위금리: (nv(s3.blRate) || 6) / 100, BL후순위금리: (nv(s3.blRate) || 6) / 100 + 0.02,
+    PF선순위금리: (nv(s3.pfRate) || 4.6) / 100, BL선순위금리: (nv(s3.blRate) || 6) / 100, BL후순위금리: (nv(s3.blRate2) != null ? nv(s3.blRate2) : (nv(s3.blRate) || 6) + 2) / 100,
+    택지구분: s3.landType || '민간택지', 주거용도: op ? '오피스텔' : '아파트', 신탁유형: s3.trust || '관리형토지신탁', 신탁: 300000,
+    중도금이자방식: s3.midInt || '무이자', 근생중도금이자방식: s3.midInt || '무이자', 철거비: nv(s3.demol) ? Math.round(nv(s3.demol) * 1e5) : 0,
+    광역부과율: /서울|경기|인천/.test(ST.parcels.map(p => p.addr || p.q).join(' ') + ST.s1.sido) ? 0.04 : 0.02,
     발코니: op ? 0 : 10000, 분양수수료: op ? Math.round(unitPrice * 0.03) : 3000, 광고률: op ? 0.01 : 0.005,
   });
   const today = new Date().toISOString().slice(0, 10);
@@ -232,7 +235,7 @@ function specOf() {
       공급가격: '사용자 입력 토지 매입가', 대지: `사업 대지(기부채납 후) — ${d.source}`, 용적률: '설계개요 지상 연면적 ÷ 대지', 설계연면적: `${d.source}: 지상+지하`,
       분양가입력: 주거총 ? (s3.priceMode === 'unit' ? `세대(실)당 ${s3.price}억 × ${세대}` : `공급평당 ${s3.price}만원`) + ' → 주거 지상면적 평당 환산' : '시세×반영률 / 상한제 상한 중 낮은 값',
       시세: nv(s3.mkt) ? `인근 시세 공급평당 ${s3.mkt}만원(사용자 조사)` : '', 공사비평당: `사용자 입력 ${s3.cost}만원/평`, 분양기간: `${s3.sale}개월 ${s3.rate}% (사용자 입력)`,
-      인허가기간: '사용자 입력', 공사비확보율: '사용자 입력(기본 50%)',
+      인허가기간: '사용자 입력', 택지구분: `사용자 선택: ${s3.landType || '민간택지'}`, 신탁유형: `사용자 선택: ${s3.trust || '관리형토지신탁'}`, 중도금이자방식: `사용자 선택: ${s3.midInt || '무이자'}`, 공사비확보율: '사용자 입력(기본 50%)', 공사기간입력: nv(s3.build) != null ? '사용자 입력' : '미입력 → 기준(30층 미만 34개월, 30층 이상 34+(층수−29))',
     },
     summary: [
       ['토지 분석', `${A1.zones.map(([z, a]) => `${z} ${f0(a)}㎡`).join(', ')} · 합계 ${f0(A1.total)}㎡ · 공시지가 합계 ${억(A1.priceSum / 1000)}`, null],
@@ -260,6 +263,9 @@ async function download() {
 }
 
 // ── 화면 ─────────────────────────────────────────────────────────────
+function sel(label, key, obj, opts, o = {}) {
+  return `<label class="fld${o.key ? ' key' : ''}"><span>${label}</span><select data-k="${key}" data-o="${o.o || ''}">${opts.map(x => `<option${x === obj[key] ? ' selected' : ''}>${x}</option>`).join('')}</select>${o.hint ? `<small>${o.hint}</small>` : ''}</label>`;
+}
 const ZONE_OPTS = () => Object.keys(D().NATIONAL).map(z => `<option>${z}</option>`).join('');
 function field(label, key, obj, opt = {}) {
   const v = obj[key] == null ? '' : obj[key];
@@ -383,7 +389,10 @@ function view3() {
     <div class="grid3">
       ${field('토지 매입가', 'land', s3, { o: 's3', unit: '억원', req: true, key: true, hint: A1.priceSum ? `공시지가 합계 ${억(A1.priceSum / 1000)}` : '' })}
       ${field('토지 계약일', 'date', s3, { o: 's3', type: 'date' })}
+      ${sel('택지 구분', 'landType', s3, ['민간택지', '공공택지'], { o: 's3', hint: '민간택지: 광역교통·학교용지·상하수도 부담금, 중개수수료 1% 반영' })}
+      ${field('기존건축물 철거비', 'demol', s3, { o: 's3', unit: '억원', hint: '토지 컨디션별 — 없으면 비움' })}
       ${field('인허가 기간 (계약→착공)', 'permit', s3, { o: 's3', unit: '개월', key: true })}
+      ${(() => { const fl = nv(d.지상층) || 25, auto = fl < 30 ? 34 : 34 + fl - 29; return field('공사기간', 'build', s3, { o: 's3', unit: '개월', ph: String(auto), hint: `비우면 기준 적용: 지상 ${fl}층 → ${auto}개월 (30층 미만 34개월, 30층 이상 34+(층수−29))` }); })()}
     </div>
     <h3>분양가 (${op ? '오피스텔' : '공동주택'} ${n}${op ? '실' : '세대'})</h3>
     <div class="seg sm"><button class="${s3.priceMode === 'unit' ? 'on' : ''}" data-pm="unit">${op ? '실당' : '세대당'} 분양가</button><button class="${s3.priceMode === 'py' ? 'on' : ''}" data-pm="py">공급평당 분양가</button></div>
@@ -394,13 +403,16 @@ function view3() {
       ${d.comm ? field('근생 분양가 (계약평당)', 'comm', s3, { o: 's3', unit: '만원/평' }) : ''}
       ${field('분양기간', 'sale', s3, { o: 's3', unit: '개월', req: true, key: true, hint: '반드시 입력' })}
       ${field('분양률', 'rate', s3, { o: 's3', unit: '%' })}
+      ${sel('중도금 이자 방식', 'midInt', s3, ['무이자', '후불제'], { o: 's3', hint: '무이자 = 시행사 부담 / 후불제 = 수분양자 부담' })}
     </div>
     <h3>공사비·금융</h3>
     <div class="grid3">
       ${field('공사비 (연면적 평당)', 'cost', s3, { o: 's3', unit: '만원/평', req: true, key: true, hint: '지방 중층 600~750 · 수도권 고층 800~1,000' })}
       ${field('공사비 확보율 (PF 조달)', 'cover', s3, { o: 's3', unit: '%', hint: '나머지 분양불' })}
+      ${sel('신탁 구분', 'trust', s3, ['관리형토지신탁', '개발형토지신탁', '자금관리대리사무', '없음'], { o: 's3', hint: '관리형 매출 0.5% · 개발형 3% · 대리사무 정액 3억 (가정 시트에서 조정)' })}
       ${field('PF 금리', 'pfRate', s3, { o: 's3', unit: '%' })}
-      ${field('브릿지론 선순위 금리', 'blRate', s3, { o: 's3', unit: '%', hint: '후순위 +2%p' })}
+      ${field('브릿지론 선순위 금리', 'blRate', s3, { o: 's3', unit: '%' })}
+      ${field('브릿지론 후순위 금리', 'blRate2', s3, { o: 's3', unit: '%' })}
     </div>
     <p class="small">기타 사업비(설계·감리·판매비·제세·부대비)와 세부 금융조건은 당사 표준 가정으로 넣고, 내려받은 엑셀의 '가정' 시트에서 고칠 수 있습니다.</p>
     ${nav(true, true, '사업성 계산 →')}</section>`;

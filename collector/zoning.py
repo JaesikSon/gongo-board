@@ -35,7 +35,7 @@ def parse(data) -> str:
 
 
 def lookup(key: str, pnu: str, domain: str) -> tuple[str, str | None]:
-    params = {"key": key, "pnu": pnu, "format": "json", "numOfRows": 10, "pageNo": 1}
+    params = {"key": key, "pnu": pnu, "format": "json", "numOfRows": 100, "pageNo": 1}
     if domain:
         params["domain"] = domain
     try:
