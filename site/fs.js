@@ -464,11 +464,14 @@ function buildPLCF(wb, S, A, LAYOUT) {
   const types = (Dg && Dg.타입 && Dg.타입.length) ? Dg.타입.slice(0, 3) : [{ name: '전체', count: null, w: 1 }];
   let wsum = 0;
   const aOf = t => (t.sup || t.ex || 1) * (t.count || 0), aTot = types.reduce((x, t) => x + aOf(t), 0) || 1;
+  const W = types.map((t, i) => { const tw = t.w != null ? t.w : Math.round(aOf(t) / aTot * 1e6) / 1e6; const w = i === types.length - 1 ? 1 - wsum : tw; wsum += w; return w; });   // 타입 면적 비중 (공급면적 우선)
+  const avgP = types.some(t => t.price) ? types.reduce((x, t, i) => x + W[i] * (t.price || 0), 0) : 0;   // 타입별 평당가 → 평균 대비 배수
+  const PF = types.map(t => avgP && t.price ? Math.round(t.price / avgP * 1e6) / 1e6 : 1);
+  if (avgP && types.length > 1 && W[types.length - 1] > 0) PF[types.length - 1] = (1 - PF.slice(0, -1).reduce((x, f, i) => x + W[i] * f, 0)) / W[types.length - 1];   // Σ 비중×배수 = 1 (매출 합계 보존)
   types.forEach((t, i) => {
-    const tw = t.w != null ? t.w : Math.round(aOf(t) / aTot * 1e6) / 1e6;   // 타입 면적 비중 (공급면적 우선)
-    const r = 16 + i, w = i === types.length - 1 ? 1 - wsum : tw; wsum += w;
+    const r = 16 + i, w = W[i], pf = PF[i];
     P(`C${r}`, t.ex ? `${t.name}(${t.ex}㎡)` : t.name); P(`D${r}`, t.count != null ? t.count : '=세대수');
-    P(`G${r}`, `=주거평*${w}/D${r}`); P(`I${r}`, '=적용분양가/10'); P(`E${r}`, `=G${r}*I${r}*D${r}*10`); P(`J${r}`, `=G${r}*I${r}*10`); P(`F${r}`, `=E${r}/$E$27`);
+    P(`G${r}`, `=주거평*${w}/D${r}`); P(`I${r}`, pf === 1 ? '=적용분양가/10' : `=적용분양가/10*${pf}`); P(`E${r}`, `=G${r}*I${r}*D${r}*10`); P(`J${r}`, `=G${r}*I${r}*10`); P(`F${r}`, `=E${r}/$E$27`);
     P(`K${r}`, '발코니 확장비 별도');
     pl.getCell(`G${r}`).numFmt = '"공급"\\ #,##0.0"평"';
   });
@@ -668,8 +671,10 @@ function buildDesign(ws, S, A, LAYOUT) {
   const T = types.map(t => {
     const sup = t.sup || t.ex * 주거지상 / exSum;
     const con = t.con || sup * (주거지상 + 지하 * (1 - A.근생비율)) / 주거지상;
-    return { name: t.name, n: t.count, ex: t.ex, sup, con };
+    return { name: t.name, n: t.count, ex: t.ex, sup, con, price: t.price };
   });
+  const tAvg = T.some(t => t.price) ? T.reduce((x, t) => x + t.n * t.sup * (t.price || 0), 0) / (T.reduce((x, t) => x + t.n * t.sup, 0) || 1) : 0;
+  T.forEach(t => { t.pf = tAvg && t.price ? Math.round(t.price / tAvg * 1e6) / 1e6 : 1; });
   const cm = Dg.근생 || {}, cSup = cm.sup || 상가지상, cEx = cm.ex || cSup * 0.85, cCon = cm.con || cSup + 지하 * A.근생비율;
   const 주거용도 = Dg.주거용도 || '아파트', 공급기준 = 주거용도 === '아파트';
   // 머리글 (양식 2~5행)
@@ -684,7 +689,7 @@ function buildDesign(ws, S, A, LAYOUT) {
     const r = r0 + i; sty(r, i === 0 ? 6 : (i === T.length - 1 ? 10 : 7));
     V(`D${r}`, t.name); V(`E${r}`, t.n); V(`F${r}`, Math.round(t.ex * 1000) / 1000); V(`G${r}`, `=F${r}*0.3025`);
     V(`H${r}`, Math.round(t.sup * 10000) / 10000); V(`I${r}`, `=H${r}*0.3025`); V(`J${r}`, Math.round(t.con * 10000) / 10000); V(`K${r}`, `=J${r}*0.3025`);
-    V(`L${r}`, `=주거매출/10*H${r}/SUMPRODUCT($E$${r0}:$E$${rN},$H$${r0}:$H$${rN})`);
+    V(`L${r}`, tAvg ? `=주거매출/10*H${r}*${t.pf}/(${T.map((x, j) => `E${r0 + j}*H${r0 + j}*${x.pf}`).join('+')})` : `=주거매출/10*H${r}/SUMPRODUCT($E$${r0}:$E$${rN},$H$${r0}:$H$${rN})`);
     V(`M${r}`, `=L${r}/G${r}`); V(`N${r}`, `=L${r}/${공급기준 ? 'I' : 'K'}${r}`); V(`O${r}`, `=E${r}*L${r}/100`); V(`P${r}`, `=O${r}/$O$${rTot}`);
   });
   sty(rSub, 11); V(`D${rSub}`, '소계'); V(`E${rSub}`, `=SUM(E${r0}:E${rN})`);

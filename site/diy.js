@@ -27,7 +27,7 @@ const ST = {
   parcels: [], s1: { donate: 0, far: null, bcr: null, height: null, sido: '' },
   s2: { mode: 'gen', use: '공동주택', commPct: 0, floors: 25, perFloor: 4, hh: null, opEx: 84, stall: 35, partial: false, checked: false },
   design: null, files: [], land: null,
-  s3: { land: null, date: '', permit: 12, sale: null, rate: 100, priceMode: 'py', price: null, mkt: null, mktRatio: 85, comm: null, cost: null, cover: 50, pfRate: 4.6, blRate: 6.0, blRate2: 8.0, build: null, landType: '민간택지', trust: '관리형토지신탁', midInt: '무이자', demol: null, sched: '0:10, 3:90', disc: 0 },
+  s3: { land: null, date: '', permit: 12, sale: null, rate: 100, priceMode: 'py', price: null, prices: {}, mkt: null, mktRatio: 85, comm: null, cost: null, cover: 50, pfRate: 4.6, blRate: 6.0, blRate2: 8.0, build: null, landType: '민간택지', trust: '관리형토지신탁', midInt: '무이자', demol: null, sched: '0:10, 3:90', disc: 0 },
   notice: null,
   result: null,
 };
@@ -276,7 +276,7 @@ async function loadNotice(id) {
   const flo = s => { const m = String(s || '').match(/(\d+)\s*층/); return m ? +m[1] : null; };
   const zoneOf = p => p.zone || r.zone || '';
   ST.notice = { id, title: r.title, url: r.url, org: r.org || r.src, noZone: false };
-  Object.assign(ST.s3, { land: null, date: '', sched: '0:10, 3:90', disc: 0, landType: '민간택지' }); ST.s1 = { donate: 0, far: null, bcr: null, height: null, sido: '' };
+  Object.assign(ST.s3, { land: null, date: '', sched: '0:10, 3:90', disc: 0, landType: '민간택지', prices: {}, price: null }); ST.s1 = { donate: 0, far: null, bcr: null, height: null, sido: '' };
   ST.design = null; ST.files = []; ST.land = null; ST.s2.checked = false;   // 다른 공고로 바꿔 불러올 때 이전 값 초기화
   ST.title = r.title;
   const base = (r.addr || [r.sido, r.sgg].filter(Boolean).join(' ')).trim();
@@ -314,6 +314,19 @@ const DIY_DEF = {
   MH: 2200000, MH운영: 30000, 분양수수료: 3000, 분양보증률: 0.0029, 보존등기률: 0.032, 신탁: 250000, 관리비_월: 30000, 입주관리: 1000, 예비비률: 0.0035, 기타비기준: 0.28,
   BL선순위비중: 0.64, BL선순위취급: 0.005, BL후순위취급: 0.03, BL자문: 0.005, PF자문: 0.005, PF보증률: 0.00848, 최소현금: 500000, Equity입력: '', 목표이익률: 0.1, 공사비확보율: 0.5,
 };
+// 평형 묶음: 59A·59B → 59, 84A·84B → 84 (이름 앞 숫자, 없으면 전용면적 반올림)
+const gKey = t => (String(t.name || '').match(/\d{2,3}/) || [])[0] || String(Math.round(nv(t.ex) || 0));
+function typeGroups(d) {
+  const G = new Map();
+  (d.types || []).filter(t => nv(t.count) > 0).forEach(t => {
+    const k = gKey(t), n = nv(t.count), g = G.get(k) || { key: k, count: 0, ex: 0, sup: 0, con: 0, use: t.use, names: [] };
+    g.count += n; g.ex += nv(t.ex) * n; g.sup += (nv(t.sup) || nv(t.ex)) * n; g.con += (nv(t.con) || nv(t.sup) || nv(t.ex)) * n; g.names.push(t.name); G.set(k, g);
+  });
+  return [...G.values()].map(g => ({ ...g, ex: g.ex / g.count, sup: g.sup / g.count, con: g.con / g.count })).sort((a, b) => a.ex - b.ex);
+}
+// 타입별 공급평당 분양가(만원/평) — 비어 있으면 시세×반영률
+const gPrice = (g, s3) => nv((s3.prices || {})[g.key]) || (nv(s3.mkt) ? nv(s3.mkt) * (nv(s3.mktRatio) || 85) / 100 : null);
+const allPriced = s3 => { const gs = ST.design ? typeGroups(ST.design) : []; return gs.length && gs.every(g => nv((s3.prices || {})[g.key])); };
 function specOf() {
   const d = ST.design, s3 = ST.s3, A1 = analyze();
   const types = d.types.filter(t => nv(t.count) > 0);
@@ -322,7 +335,8 @@ function specOf() {
   const 근생비율 = 지상 ? commSup / 지상 : 0, 주거평 = 지상 * (1 - 근생비율) * PY;
   const supTot = types.reduce((a, t) => a + (nv(t.sup) || nv(t.ex)) * nv(t.count), 0);
   let 주거총 = null;   // 천원 (발코니 제외)
-  if (nv(s3.price)) 주거총 = nv(s3.price) * 10 * supTot * PY;   // 공급평당 분양가 × 공급면적 (세대당 가격은 자동 계산)
+  const groups = typeGroups(d), priced = allPriced(s3);
+  if (priced) 주거총 = groups.reduce((a, g) => a + nv(s3.prices[g.key]) * 10 * g.sup * g.count * PY, 0);   // 타입별 공급평당 분양가 × 공급면적
   const op = d.use === '오피스텔';
   const unitPrice = 주거총 ? 주거총 / 세대 : (nv(s3.mkt) || 0) * 10 * (supTot / 세대) * PY * (nv(s3.mktRatio) || 85) / 100;
   const sched = parseSched(s3.sched) || [[0, 0.1], [3, 0.9]];
@@ -344,7 +358,7 @@ function specOf() {
   const today = new Date().toISOString().slice(0, 10);
   const design = { 지상, 지하: nv(d.지하), 연면적: nv(d.연면적), 지하층: nv(d.지하층), 최고층: nv(d.지상층), 동수: nv(d.동수) || 1, 건축면적: nv(d.건축면적) || 0,
     주차: nv(d.주차), 주차근거: d.source, 세대, 건폐율: nv(d.건폐율) || 0, 용적률: nv(d.용적률) || 지상 / 대지 * 100, 배수: nv(d.연면적) / 지상,
-    타입: types.map(t => ({ name: t.name, ex: nv(t.ex), count: nv(t.count), w: nv(t.ex) * nv(t.count) / (types.reduce((a, x) => a + nv(x.ex) * nv(x.count), 0) || 1), sup: nv(t.sup) || undefined, con: nv(t.con) || undefined })),
+    타입: groups.map(g => ({ name: g.key, ex: Math.round(g.ex * 100) / 100, count: g.count, sup: Math.round(g.sup * 10000) / 10000, con: Math.round(g.con * 10000) / 10000, price: priced ? nv(s3.prices[g.key]) * 10 : undefined })),   // 평형 묶음(59·84…) + 타입별 평당가
     주거용도: op ? '오피스텔' : '아파트', 근생: d.comm ? { ex: nv(d.comm.ex), sup: commSup, con: nv(d.comm.con) } : undefined };
   const capArea = A1.flags.some(f => /분양가상한제/.test(f)) && !op;
   const title = ST.title || (ST.parcels[0] ? (ST.parcels[0].addr || ST.parcels[0].q) : '사업성 DIY');
@@ -353,7 +367,7 @@ function specOf() {
     site: { addr: ST.parcels.map(p => p.addr || p.q).join(', '), zone: A1.zones.map(([z]) => z).join(', ') + (A1.flags.some(f => /지구단위/.test(f)) ? ', 지구단위계획구역' : '') },
     notes: {
       대지: `사업 대지(기부채납 후) — ${d.source}`, 용적률: '설계개요 지상 연면적 ÷ 대지', 설계연면적: `${d.source}: 지상+지하`,
-      분양가입력: 주거총 ? `공급평당 ${s3.price}만원 (세대당 = 타입별 공급평 × 평당가)` : '시세×반영률 / 상한제 상한 중 낮은 값', 상가시세: d.comm && nv(s3.comm) ? `근생 전용평당 ${s3.comm}만원 → 공급평당 환산` : '',
+      분양가입력: 주거총 ? `타입별 공급평당 ${groups.map(g => `${g.key}타입 ${f0(nv(s3.prices[g.key]))}만원`).join(' · ')} → 평균` : '시세×반영률 / 상한제 상한 중 낮은 값', 상가시세: d.comm && nv(s3.comm) ? `근생 전용평당 ${s3.comm}만원 → 공급평당 환산` : '',
       시세: nv(s3.mkt) ? `인근 시세 공급평당 ${s3.mkt}만원(사용자 조사)` : '', 공사비평당: `사용자 입력 ${s3.cost}만원/평`, 분양기간: `${s3.sale}개월 ${s3.rate}% (사용자 입력)`,
       인허가기간: '사용자 입력', 선납할인율: nv(s3.disc) ? `선납일수 × 연 ${s3.disc}% (공고 조건)` : '', 주거분양평: allSup ? '설계개요 타입별 공급면적 합계' : '',
       공급가격: ST.notice ? `공고 공급가격(기준가) — ${ST.notice.title}` : '사용자 입력 토지 매입가', 택지구분: `사용자 선택: ${s3.landType || '민간택지'}`, 신탁유형: `사용자 선택: ${s3.trust || '관리형토지신탁'}`, 중도금이자방식: `사용자 선택: ${s3.midInt || '무이자'}`, 공사비확보율: '사용자 입력(기본 50%)', 공사기간입력: nv(s3.build) != null ? '사용자 입력' : '미입력 → 기준(30층 미만 34개월, 30층 이상 34+(층수−29))',
@@ -403,7 +417,7 @@ function renderStepper() {
 function canGo(g) {
   if (g >= 2 && !(ST.consent && analyze().total > 0 && analyze().main)) return false;
   if (g >= 3 && !(ST.design && ST.s2.checked)) return false;
-  if (g >= 4 && !(nv(ST.s3.land) && nv(ST.s3.sale) && nv(ST.s3.cost) && (nv(ST.s3.price) || nv(ST.s3.mkt)))) return false;
+  if (g >= 4 && !(nv(ST.s3.land) && nv(ST.s3.sale) && nv(ST.s3.cost) && (allPriced(ST.s3) || nv(ST.s3.mkt)))) return false;
   return true;
 }
 function render() {
@@ -513,18 +527,19 @@ function view2() {
     ${nav(true, true)}</section>`;
 }
 // 타입별 세대(실)당 분양가 자동 계산 (공급평당 분양가 × 타입 공급평)
-function unitPriceHtml() {
-  const d = ST.design, s3 = ST.s3; if (!d) return '';
-  const op = d.use === '오피스텔', px = nv(s3.price) || (nv(s3.mkt) ? nv(s3.mkt) * (nv(s3.mktRatio) || 85) / 100 : null);
-  if (!px) return '<p class="small">공급평당 분양가(또는 시세)를 넣으면 타입별 세대당 분양가가 자동 계산됩니다.</p>';
-  const types = d.types.filter(t => nv(t.count) > 0); let tot = 0, n = 0;
-  const rows = types.map(t => { const py = (nv(t.sup) || nv(t.ex)) * PY, u = px * py / 1e4; tot += u * nv(t.count); n += nv(t.count);
-    return `<tr><td>${esc(t.name)}</td><td>${f2(nv(t.ex))}㎡</td><td>${f2(py)}평</td><td>${f0(nv(t.count))}</td><td><b>${u.toFixed(2)}억</b></td><td>${f0(u * nv(t.count))}억</td></tr>`; }).join('');
+function unitOf(g, s3) { const px = gPrice(g, s3); return px ? px * g.sup * PY / 1e4 : null; }   // 억원
+function priceRows(d, s3) {
+  const op = d.use === '오피스텔';
+  return typeGroups(d).map(g => { const u = unitOf(g, s3), own = nv((s3.prices || {})[g.key]);
+    return `<div class="prow"><span class="pl"><b>${esc(g.key)}타입</b><small>전용 ${f2(g.ex)}㎡ · 공급 ${f2(g.sup * PY)}평 · ${f0(g.count)}${op ? '실' : '세대'}${g.names.length > 1 ? ` (${g.names.map(esc).join('·')})` : ''}</small></span>
+      <span class="pi"><input class="gp" data-gk="${esc(g.key)}" value="${own == null ? '' : own}" inputmode="decimal" placeholder="${nv(s3.mkt) ? f0(gPrice(g, s3)) : '예) 1900'}"><em>만원/평</em></span>
+      <span class="pu" id="pu-${esc(g.key)}">${u ? `(${op ? '실당' : '세대당'} ${u.toFixed(2)}억원${own == null ? ' · 시세×반영률' : ''})` : `(${op ? '실당' : '세대당'} -억원)`}</span></div>`; }).join('');
+}
+function priceTotal(d, s3) {
+  const gs = typeGroups(d); let tot = 0, n = 0, ok = true;
+  gs.forEach(g => { const u = unitOf(g, s3); if (u == null) ok = false; else { tot += u * g.count; n += g.count; } });
   const c = d.comm && nv(s3.comm) ? (nv(d.comm.ex) || nv(d.comm.sup) * 0.85) * PY * nv(s3.comm) / 1e4 : 0;
-  return `<h3>${op ? '실당' : '세대당'} 분양가 (자동 계산 · ${nv(s3.price) ? '공급평당 ' + f0(px) : '시세×반영률 ' + f0(px)}만원/평${!nv(s3.price) && s3.landType === '공공택지' ? ', 상한제 상한과 비교해 낮은 값 적용' : ''})</h3>
-    <div class="tw"><table class="pt"><thead><tr><th>타입</th><th>전용</th><th>공급</th><th>${op ? '실' : '세대'}수</th><th>${op ? '실당' : '세대당'} 분양가</th><th>매출</th></tr></thead><tbody>${rows}
-    <tr><th>합계</th><th></th><th></th><th>${f0(n)}</th><th>평균 ${n ? (tot / n).toFixed(2) : '-'}억</th><th>${f0(tot)}억</th></tr>${c ? `<tr><td>근생</td><td colspan="3">전용평당 ${f0(nv(s3.comm))}만원</td><td></td><td>${f0(c)}억</td></tr>` : ''}</tbody></table></div>
-    <p class="small">발코니 확장비 별도 · ${op ? '오피스텔은 공급면적이 없으면 전용면적 기준' : '공급면적 = 전용 + 주거공용'}</p>`;
+  return ok && n ? `주거 매출 ${f0(tot)}억 · 평균 ${d.use === '오피스텔' ? '실당' : '세대당'} ${(tot / n).toFixed(2)}억${c ? ` · 근생 ${f0(c)}억` : ''} (발코니 확장비 별도)` : '타입별 공급평당 분양가를 모두 넣거나, 비워 두고 인근 시세를 넣으세요.';
 }
 function view3() {
   const s3 = ST.s3, d = ST.design, A1 = analyze(), op = d.use === '오피스텔';
@@ -545,9 +560,10 @@ function view3() {
       ${field('선납할인율 (연)', 'disc', s3, { o: 's3', unit: '%', hint: '공공택지 선납할인 — 없으면 0' })}
       ${(() => { const fl = nv(d.지상층) || 25, auto = fl < 30 ? 34 : 34 + fl - 29; return field('공사기간', 'build', s3, { o: 's3', unit: '개월', ph: String(auto), hint: `비우면 기준 적용: 지상 ${fl}층 → ${auto}개월 (30층 미만 34개월, 30층 이상 34+(층수−29))` }); })()}
     </div>
-    <h3>분양가 (${op ? '오피스텔' : '공동주택'} ${n}${op ? '실' : '세대'})</h3>
+    <h3>분양가 (${op ? '오피스텔' : '공동주택'} ${n}${op ? '실' : '세대'}) — 타입별 공급평당 분양가</h3>
+    <div class="prices">${priceRows(d, s3)}</div>
+    <p class="small" id="ptot">${priceTotal(d, s3)}</p>
     <div class="grid3">
-      ${field('공급평당 분양가', 'price', s3, { o: 's3', unit: '만원/평', key: true, hint: '없으면 비워 두고 시세 입력' })}
       ${field('인근 시세 (공급평당, 자체 조사)', 'mkt', s3, { o: 's3', unit: '만원/평', hint: '분양가가 없을 때 시세×반영률 적용' })}
       ${field('시세 반영률', 'mktRatio', s3, { o: 's3', unit: '%' })}
       ${d.comm ? field('근생 분양가 (전용평당)', 'comm', s3, { o: 's3', unit: '만원/평', hint: `근생 전용 ${f2((nv(d.comm.ex) || nv(d.comm.sup) * 0.85) * PY)}평` }) : ''}
@@ -555,7 +571,6 @@ function view3() {
       ${field('분양률', 'rate', s3, { o: 's3', unit: '%' })}
       ${sel('중도금 이자 방식', 'midInt', s3, ['무이자', '후불제'], { o: 's3', hint: '무이자 = 시행사 부담 / 후불제 = 수분양자 부담' })}
     </div>
-    <div id="unitp">${unitPriceHtml()}</div>
     <h3>공사비·금융</h3>
     <div class="grid3">
       ${field('공사비 (연면적 평당)', 'cost', s3, { o: 's3', unit: '만원/평', req: true, key: true, hint: '지방 중층 600~750 · 수도권 고층 800~1,000' })}
@@ -596,7 +611,9 @@ function bind() {
   $$('.cell').forEach(el => el.addEventListener('change', () => { ST.parcels[+el.dataset.pi][el.dataset.pk] = el.dataset.pk === 'zone' ? el.value : nv(el.value); later(); }));
   $$('[data-del]').forEach(b => b.onclick = () => { ST.parcels.splice(+b.dataset.del, 1); later(); });
   $$('[data-mode]').forEach(b => b.onclick = () => { ST.s2.mode = b.dataset.mode; later(); });
-    ['price', 'mkt', 'mktRatio', 'comm'].forEach(k => { const el = $(`[data-k=${k}][data-o=s3]`); if (el) el.addEventListener('input', () => { const u = $('#unitp'); if (u) u.innerHTML = unitPriceHtml(); }); });
+  const refreshP = () => { const d = ST.design, s3 = ST.s3; if (!d) return; typeGroups(d).forEach(g => { const el = document.getElementById('pu-' + g.key), u = unitOf(g, s3), own = nv((s3.prices || {})[g.key]); if (el) el.textContent = u ? `(${d.use === '오피스텔' ? '실당' : '세대당'} ${u.toFixed(2)}억원${own == null ? ' · 시세×반영률' : ''})` : `(${d.use === '오피스텔' ? '실당' : '세대당'} -억원)`; }); const t = $('#ptot'); if (t) t.textContent = priceTotal(d, s3); };
+  $$('.gp').forEach(el => el.addEventListener('input', () => { ST.s3.prices = ST.s3.prices || {}; const v = nv(el.value); if (v == null) delete ST.s3.prices[el.dataset.gk]; else ST.s3.prices[el.dataset.gk] = v; refreshP(); }));
+  ['mkt', 'mktRatio', 'comm'].forEach(k => { const el = $(`[data-k=${k}][data-o=s3]`); if (el) el.addEventListener('input', refreshP); });
   $$('.dz').forEach(el => el.addEventListener('change', () => { ST.design[el.dataset.dk] = nv(el.value); ST.s2.checked = false; later(); }));
   $$('.dt').forEach(el => el.addEventListener('change', () => { const t = ST.design.types[+el.dataset.ti]; t[el.dataset.tk] = /name|use/.test(el.dataset.tk) ? el.value : nv(el.value); if (el.dataset.tk === 'use') ST.design.use = ST.design.types.some(x => x.use === '오피스텔') ? '오피스텔' : '공동주택'; ST.s2.checked = false; later(); }));
   $$('.dc').forEach(el => el.addEventListener('change', () => { ST.design.comm = ST.design.comm || {}; ST.design.comm[el.dataset.ck] = nv(el.value); if (!nv(ST.design.comm.sup)) ST.design.comm = null; ST.s2.checked = false; later(); }));
@@ -671,7 +688,7 @@ async function act(a, btn) {
   if (a === 'next') {
     if (ST.step === 1) { if (!ST.consent) return alertBox('데이터 전송에 동의해야 진행할 수 있습니다.'); if (!(analyze().total > 0 && analyze().main)) return alertBox('면적과 용도지역을 입력(또는 조회)하세요.'); collect('step1'); }
     if (ST.step === 2) { if (!ST.design) return alertBox('설계개요를 산출하거나 파일을 올리세요.'); if (!ST.s2.checked) return alertBox('설계개요 숫자를 확인하고 체크해 주세요.'); }
-    if (ST.step === 3) { const s = ST.s3; if (!nv(s.land) || !nv(s.sale) || !nv(s.cost) || !(nv(s.price) || nv(s.mkt))) return alertBox('토지 매입가, 분양가(또는 시세), 분양기간, 공사비는 필수입니다.'); collect('step3'); }
+    if (ST.step === 3) { const s = ST.s3; if (!nv(s.land) || !nv(s.sale) || !nv(s.cost) || !(allPriced(s) || nv(s.mkt))) return alertBox('토지 매입가, 타입별 분양가(또는 시세), 분양기간, 공사비는 필수입니다.'); collect('step3'); }
     ST.step++; render(); return;
   }
   if (a === 'prev') { ST.step--; render(); return; }
@@ -706,6 +723,7 @@ $('#load').onchange = async e => {
   try { const o = JSON.parse(await f.text()); Object.assign(ST, o, { files: [], result: null, step: 1 });
     if (ST.s3.priceMode === 'unit') { const ts = ((ST.design || {}).types || []).filter(t => nv(t.count) > 0), sp = ts.reduce((a, t) => a + (nv(t.sup) || nv(t.ex)) * nv(t.count), 0) * PY, n = ts.reduce((a, t) => a + nv(t.count), 0);
       ST.s3.price = nv(ST.s3.price) && sp ? Math.round(nv(ST.s3.price) * 1e4 * n / sp) : null; ST.s3.priceMode = 'py'; }   // 예전 세대당 입력 → 공급평당 환산
+    if (nv(ST.s3.price) && ST.design && !Object.keys(ST.s3.prices || {}).length) { ST.s3.prices = {}; typeGroups(ST.design).forEach(g => { ST.s3.prices[g.key] = nv(ST.s3.price); }); }   // 단일 평당가 → 타입별
     render(); } catch (err) { alertBox('불러오기 실패: ' + err.message); }
 };
 fetch('data/diy_config.json?v=' + Date.now()).then(r => r.ok ? r.json() : {}).catch(() => ({})).then(c => { CFG = Object.assign(CFG, c || {}); render();

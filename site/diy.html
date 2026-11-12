@@ -98,6 +98,12 @@ td.rec input{border:2px solid var(--new)}
 .drop.sm{padding:14px;margin:10px 0 4px}
 .sum.land{background:var(--accent-soft);border:0;border-radius:10px;padding:10px 14px;display:flex;flex-direction:column;gap:4px}
 .sum.land select{padding:6px 8px;border-radius:6px;border:1px solid var(--line);background:var(--panel);color:var(--ink);font:inherit}
+.prices{display:flex;flex-direction:column;gap:8px;margin:6px 0 4px}
+.prow{display:grid;grid-template-columns:minmax(200px,1.2fr) minmax(160px,1fr) minmax(150px,1fr);gap:10px;align-items:center;background:var(--bg);border-radius:10px;padding:8px 12px}
+.prow .pl{display:flex;flex-direction:column}.prow .pl small{color:var(--muted);font-size:12.5px}
+.prow .pi{display:flex;align-items:center;gap:6px}.prow .pi input{width:100%;padding:9px 10px;border:1px solid var(--line);border-radius:8px;background:var(--key);color:var(--ink);font:inherit;font-size:15px;font-weight:700}
+.prow .pi em{font-style:normal;color:var(--muted);font-size:13px;white-space:nowrap}.prow .pu{font-variant-numeric:tabular-nums;font-weight:700;color:var(--accent)}
+@media (max-width:760px){.prow{grid-template-columns:1fr}}
 .pick{display:flex;gap:8px;align-items:center;flex-wrap:wrap;background:var(--accent-soft);border-radius:10px;padding:10px 14px;margin:0 0 14px}
 .pick .lab{font-weight:700;color:var(--accent)}
 .pick input{flex:1 1 200px;min-width:160px;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--panel);color:var(--ink);font:inherit;font-size:14px}
@@ -132,8 +138,8 @@ td.rec input{border:2px solid var(--new)}
 </div>
 <div id="toast" role="status"></div>
 <script src="design.js?v=20261112b"></script>
-<script src="fs.js?v=20261112d"></script>
+<script src="fs.js?v=20261112e"></script>
 <script src="diy-parse.js?v=20261112d"></script>
-<script src="diy.js?v=20261112k"></script>
+<script src="diy.js?v=20261112l"></script>
 </body>
 </html>
