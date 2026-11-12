@@ -249,6 +249,21 @@ function parseSched(t) {
 }
 const schedText = arr => arr.map(([m, r]) => `${m}:${Math.round(r * 10000) / 100}`).join(', ');
 
+// ── 매각공고 목록 (STEP1 '공고에서 불러오기' 선택용) ─────────────────────
+let NLIST = null;
+async function noticeList() {
+  if (NLIST) return NLIST;
+  const N = await fetch('data/notices.json?t=' + Date.now()).then(r => r.ok ? r.json() : null).catch(() => null);
+  NLIST = ((N && N.items) || []).filter(r => (r.area || r.sum) && !/건물|주택 >|아파트|차량|동산/.test(r.usage || ''))
+    .sort((a, b) => String(a.end || '9').localeCompare(String(b.end || '9')));
+  return NLIST;
+}
+function noticeOptions(q) {
+  const t = String(q || '').trim().toLowerCase().split(/\s+/).filter(Boolean);
+  const L = (NLIST || []).filter(r => t.every(w => [r.title, r.org, r.src, r.addr, r.sido, r.sgg, r.cat].join(' ').toLowerCase().includes(w)));
+  return `<option value="">${NLIST ? `공고 선택 (${L.length}건)` : '목록 불러오는 중…'}</option>` + L.map(r => `<option value="${esc(r.id)}"${ST.notice && ST.notice.id === r.id ? ' selected' : ''}>${r.end ? `[마감 ${esc(String(r.end).slice(5, 10))}] ` : ''}${esc(r.title)} · ${esc(r.org || r.src)}${r.area ? ` · ${f0(r.area)}㎡` : ''}</option>`).join('');
+}
+
 // ── 공고에서 불러오기 (diy.html?notice=ID) ───────────────────────────────
 async function loadNotice(id) {
   const get = u => fetch(u + '?t=' + Date.now()).then(r => r.ok ? r.json() : null).catch(() => null);
@@ -261,6 +276,8 @@ async function loadNotice(id) {
   const flo = s => { const m = String(s || '').match(/(\d+)\s*층/); return m ? +m[1] : null; };
   const zoneOf = p => p.zone || r.zone || '';
   ST.notice = { id, title: r.title, url: r.url, org: r.org || r.src, noZone: false };
+  Object.assign(ST.s3, { land: null, date: '', sched: '0:10, 3:90', disc: 0, landType: '민간택지' }); ST.s1 = { donate: 0, far: null, bcr: null, height: null, sido: '' };
+  ST.design = null; ST.files = []; ST.land = null; ST.s2.checked = false;   // 다른 공고로 바꿔 불러올 때 이전 값 초기화
   ST.title = r.title;
   const base = (r.addr || [r.sido, r.sgg].filter(Boolean).join(' ')).trim();
   ST.parcels = (plots.length ? plots : [{ block: '', addr: base, area: r.area, zone: r.zone }]).map(p => ({
@@ -420,6 +437,11 @@ function view1() {
     <p class="lead">사업 부지의 지번을 입력하면 브이월드에서 면적·지목·용도지역·공시지가와 토지이용계획(지역·지구·구역)을 조회해 개발 가능 규모와 확인할 규제를 정리합니다. 조회가 안 되면 표에 직접 입력하세요.</p>
     <div class="consent"><label><input type="checkbox" id="consent" ${ST.consent ? 'checked' : ''}> <b>입력값과 업로드 파일이 사이트 운영자에게 전송·보관되는 데 동의합니다.</b></label>
       <small>사업성 분석 품질 개선을 위한 데이터 수집 목적이며, 운영자 외에는 열람할 수 없습니다. 토지조서 원본(소유자 정보)은 보내지 않고 인식된 필지 정보만 전송합니다. 동의해야 진행할 수 있습니다.</small></div>
+    <div class="pick"><span class="lab">매각공고에서 불러오기</span>
+      <input id="nq" placeholder="공고명·지역 검색 (예: 검단, 공동주택)" value="">
+      <select id="nsel">${noticeOptions('')}</select>
+      <button class="btn ghost sm" data-act="nload">불러오기</button>
+      <small>공고 목록의 토지 공고를 고르면 공급가격·면적·용적률·층수·세대수·계약일·납부조건을 채웁니다.</small></div>
     <div class="grid2">
       ${field('사업명', 'title', ST, { o: 'root', type: 'text', ph: '예) ○○동 주상복합' })}
       <label class="fld"><span>지번 (한 줄에 하나, 합필 가능)</span><textarea id="jibun" rows="3" placeholder="○○시 ○○구 ○○동 123-4&#10;○○시 ○○구 ○○동 123-5">${esc(ST.parcels.length > 60 ? '' : ST.parcels.map(p => p.q).join('\n'))}</textarea></label>
@@ -569,6 +591,8 @@ function bind() {
   const lf = $('#landfile');
   if (lf) { const dz = lf.parentElement; ['dragover', 'dragenter'].forEach(e => dz.addEventListener(e, ev => { ev.preventDefault(); dz.classList.add('over'); })); ['dragleave', 'drop'].forEach(e => dz.addEventListener(e, () => dz.classList.remove('over'))); lf.onchange = () => lf.files[0] && handleLandFile(lf.files[0]); }
   const ls = $('#lsec'); if (ls) ls.onchange = () => { applyLand(+ls.value); later(); };
+  const nq = $('#nq'), ns = $('#nsel');
+  if (nq && ns) { nq.oninput = () => { ns.innerHTML = noticeOptions(nq.value); }; if (!NLIST) noticeList().then(() => { ns.innerHTML = noticeOptions(nq.value); }); }
   const fi = $('#file');
   if (fi) {
     const drop = fi.parentElement;
@@ -639,6 +663,7 @@ async function act(a, btn) {
   }
   if (a === 'prev') { ST.step--; render(); return; }
   if (a === 'vfill') { await fillFromVworld(btn); return; }
+  if (a === 'nload') { const id = $('#nsel').value; if (!id) return alertBox('불러올 공고를 고르세요.'); const keep = ST.consent; btn.disabled = true; await loadNotice(id); ST.consent = keep; try { history.replaceState(null, '', '?notice=' + encodeURIComponent(id)); } catch (e) { /* 무시 */ } return; }
   if (a === 'addrow') { ST.parcels.push({ q: '직접 입력', area: null, zone: '', price: null, uses: [] }); render(); return; }
   if (a === 'savekey') { try { localStorage.setItem('diy_vworld', $('#vkey').value.trim()); } catch (e) { /* 무시 */ } render(); return; }
   if (a === 'lookup') {
