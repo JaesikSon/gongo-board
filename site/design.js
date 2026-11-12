@@ -240,7 +240,7 @@ function fromNotice(r, opt = {}) {
   const bcr = firstNum(b.bcr) || firstNum(p0.bcr) || NATIONAL[zone][0];
   const floorsLim = opt.층수 || firstNum(b.floors, /(\d+)\s*층/) || firstNum(b.height, /(\d+)\s*층/) || firstNum(p0.floors, /(\d+)\s*층/) || 25;
   const fH = opt.층고 || 2.9;
-  const above = area * far / 100, aptNet = 0.75;
+  const above = area * far / 100, aptNet = (opt.전용률 || 75) / 100;
   let hh = opt.세대수 || maxNum(b.units, /([\d,]+)\s*(?:세대|호)/g) || null;
   // 세대 타입: 계획 세대수가 있으면 평균 전용면적을 맞추도록 59·84·114 구성비 산정, 없으면 84㎡ 단일
   const T = [59.9, 84.9, 114.9]; let units;
@@ -249,6 +249,7 @@ function fromNotice(r, opt = {}) {
   else if (avg <= T[1]) { const s = (avg - T[0]) / (T[1] - T[0]); units = [{ name: '59', ex: T[0], share: (1 - s) * 100 }, { name: '84', ex: T[1], share: s * 100 }]; }
   else if (avg <= T[2]) { const s = (avg - T[1]) / (T[2] - T[1]); units = [{ name: '84', ex: T[1], share: (1 - s) * 100 }, { name: '114', ex: T[2], share: s * 100 }]; }
   else units = [{ name: '114', ex: T[2], share: 100 }];
+  if (Array.isArray(opt.타입) && opt.타입.length) { const tot = opt.타입.reduce((x, t) => x + (+t.share || 0), 0) || 1; units = opt.타입.map(t => ({ name: t.name, ex: +t.ex, share: (+t.share || 0) / tot * 100 })); }   // 공고 세대 구성 직접 지정
   const avgEx = units.reduce((a, u) => a + u.ex * u.share, 0) / 100;
   const perFloor = opt.동당세대 || 4, plate = Math.round(perFloor * avgEx / aptNet);
   const nDong = Math.max(1, Math.ceil(above / (plate * floorsLim)));
