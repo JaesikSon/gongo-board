@@ -194,7 +194,7 @@ const isArch = () => tab === 'arch';
 
 const won = v => {
   if (v == null || v === '') return '';
-  if (v >= 1e8) { const e = v / 1e8; return (e >= 100 ? Math.round(e).toLocaleString() : e.toFixed(e % 1 ? 2 : 0).replace(/\.?0+$/,'')) + '억'; }
+  if (v >= 1e8) { const e = v / 1e8; return (e >= 100 ? Math.round(e).toLocaleString() : e % 1 ? e.toFixed(2).replace(/\.?0+$/,'') : String(e)) + '억'; }
   if (v >= 1e4) return Math.round(v / 1e4).toLocaleString() + '만';
   return v.toLocaleString() + '원';
 };
@@ -310,7 +310,7 @@ function sumPanel(r){
     ['건폐율', p => esc(p.bcr || '')], ['용적률', p => esc(p.far || '')], ['층수·높이', p => esc(p.floors || ''), 'wrap'],
     ['세대수', p => p.units ? esc(String(p.units)) : ''], ['토지사용', p => esc(p.use_from || '')], ['공급방법', p => esc(p.method || '')],
   ].filter(([, f]) => ps.some(p => f(p)));
-  const table = ps.length ? `<div class="sb"><h4>공급 필지 <span class="small">(${s.plots_src === '필지목록' ? '첨부 필지목록 엑셀' : 'LH 상세페이지'} 기준)</span></h4><div class="tw"><table class="pt">
+  const table = ps.length ? `<div class="sb"><h4>공급 필지 <span class="small">(${s.plots_src === '필지목록' ? '첨부 필지목록 엑셀' : s.plots_src === '공고문' ? esc(s.src || '공고문') : 'LH 상세페이지'} 기준)</span></h4><div class="tw"><table class="pt">
     <tr>${cols.map(c => `<th>${c[0]}</th>`).join('')}</tr>
     ${ps.slice(0, 80).map(p => `<tr>${cols.map(c => `<td class="${c[2]||''}">${c[1](p)}</td>`).join('')}</tr>`).join('')}</table></div>
     ${ps.length > 80 ? `<div class="hint">외 ${ps.length - 80}필지는 원문 필지목록을 확인하세요.</div>` : ''}</div>` : '';
@@ -320,14 +320,14 @@ function sumPanel(r){
   let plan;
   if (ai.blocks && ai.blocks.length) {
     const F = [['허용용도','allowed'],['불허용도','banned'],['건폐율','bcr'],['용적률','far'],['최고층수','floors'],['최고높이','height'],['세대·규모','units']];
-    plan = `<div class="sb ai"><h4>지구단위계획 인허가 제한 <span class="small">(AI 요약${ai.model && ai.model.includes('시연') ? ' · API 설정 전 견본' : ''})</span></h4>
+    plan = `<div class="sb ai"><h4>${ai.manual ? '인허가 제한·공고 유의사항' : '지구단위계획 인허가 제한'} <span class="small">(${ai.manual ? `공고문 검토 요약 · ${esc(ai.at || '')}` : `AI 요약${ai.model && ai.model.includes('시연') ? ' · API 설정 전 견본' : ''}`})</span></h4>
       ${ai.blocks.map(b => `<div class="blk"><div class="bh">${esc(b.block)}${b.use ? ` <span class="small">${esc(b.use)}</span>` : ''}</div>
         <div class="kv">${F.filter(([,k]) => b[k]).map(([l,k]) => `<span>${l}</span><span${/far|bcr|height|floors/.test(k) ? ' class="em"' : ''}>${esc(b[k])}</span>`).join('')}
         ${(b.other||[]).length ? `<span>주요 규제</span><span><ul>${b.other.map(x => `<li>${esc(x)}</li>`).join('')}</ul></span>` : ''}
         ${b.pages ? `<span>근거</span><span class="small">${esc(b.pages)}</span>` : ''}</div></div>`).join('')}
       ${(ai.common||[]).length ? `<div class="blk"><div class="bh">지구 공통·공고 유의사항</div><ul>${ai.common.map(x => `<li>${esc(x)}</li>`).join('')}</ul></div>` : ''}
       ${(ai.src||[]).length ? `<div class="hint">읽은 문서: ${esc(ai.src.join(', '))}</div>` : ''}
-      <div class="hint">AI가 원문에서 뽑은 요약이라 틀릴 수 있습니다. 근거 쪽을 원문에서 꼭 확인하세요.</div></div>`;
+      <div class="hint">${ai.manual ? '공고문을 읽고 정리한 요약입니다.' : 'AI가 원문에서 뽑은 요약이라 틀릴 수 있습니다.'} 근거 쪽을 원문에서 꼭 확인하세요.</div></div>`;
   } else {
     const pf = (s.files || []).filter(f => f.kind === '지구단위계획');
     plan = `<div class="sb"><h4>지구단위계획</h4><div class="hint">${pf.length
@@ -338,7 +338,7 @@ function sumPanel(r){
     `<a href="${esc(f.url)}" target="_blank" rel="noopener"><b>${esc(f.kind)}</b>${esc(f.name.length > 46 ? f.name.slice(0,44)+'…' : f.name)}</a>`).join('')}</div></div>` : '';
   const dl = `<div class="dl"><span class="small">이 요약 내려받기</span><button type="button" data-dl="docx" data-id="${esc(r.id)}">Word (.docx)</button><button type="button" data-dl="pptx" data-id="${esc(r.id)}">PowerPoint (.pptx)</button></div>`;
   return `<details class="sum"><summary>요약 보기 ${sumKey(r)}</summary>${dl}${table}${sched}${plan}${files}
-    <div class="hint">LH 상세페이지·첨부 필지목록에서 자동 추출했습니다. 입찰·청약 전 반드시 원문 공고를 확인하세요.</div></details>`;
+    <div class="hint">${s.src ? `${esc(s.src)}를 검토해 정리했습니다.` : 'LH 상세페이지·첨부 필지목록에서 자동 추출했습니다.'} 입찰·청약 전 반드시 원문 공고를 확인하세요.</div></details>`;
 }
 
 function fsBlock(r){
@@ -425,6 +425,9 @@ async function load(){
   try { DATA = await fetch('data/notices.json?t=' + Date.now()).then(r => r.json()); }
   catch(e) { DATA = {items:[], statuses:[]}; }
   const items = DATA.items || (DATA.items = []);
+  // 수동 요약(공고문 검토) — 자동 추출 요약이 없는 공고에 덧붙임
+  try { const OV = await fetch('data/notice_sum.json?t=' + Date.now()).then(r => r.ok ? r.json() : {});
+    items.forEach(r => { const o = OV[r.id]; if (o && !r.sum) Object.assign(r, o); }); } catch(e) {}
   const nThing = items.filter(r => r.kind === '물건').length;
   $('#n-all').textContent = items.length.toLocaleString();
   $('#n-thing').textContent = nThing.toLocaleString();
@@ -555,11 +558,11 @@ async function exportDocx(r){
     h('1. 핵심 요약'), kv(R.key),
   ];
   if (R.plots.length) {
-    kids.push(h('2. 공급 필지'), para(`(${R.plotsSrc === '필지목록' ? '첨부 필지목록 엑셀' : 'LH 상세페이지'} 기준, ${R.plots.length}필지)`, { size: 16, color: '6B6F76' }),
+    kids.push(h('2. 공급 필지'), para(`(${R.plotsSrc === '필지목록' ? '첨부 필지목록 엑셀' : R.plotsSrc === '공고문' ? (r.sum.src || '공고문') : 'LH 상세페이지'} 기준, ${R.plots.length}필지)`, { size: 16, color: '6B6F76' }),
       table(PLOT_HEAD, R.plots.slice(0, 200).map(plotRow), [1250, 1600, 1150, 1050, 1250, 1150, 1238, 950]));
   }
   if (R.schedule.length) kids.push(h('3. 공급 일정'), kv(R.schedule));
-  kids.push(h('4. 지구단위계획 인허가 제한' + (R.blocks.length ? ' (AI 요약)' : '')));
+  kids.push(h(((r.ai || {}).manual ? '4. 인허가 제한·공고 유의사항 (공고문 검토 요약)' : '4. 지구단위계획 인허가 제한' + (R.blocks.length ? ' (AI 요약)' : ''))));
   if (R.blocks.length) {
     R.blocks.forEach(b => {
       kids.push(para(`■ ${b.block}`, { size: 21, bold: true, after: 60 }));
@@ -838,7 +841,7 @@ async function exportPptx(r){
     cutV([p.bcr, p.far].filter(Boolean).join(' / '), 11.5), cutV(p.use_from || '', 7.5)];
   const plotH = p => rowH(plotRow(p).map((c, i) => [typeof c === 'string' ? c : c.text, PCOLS[i]]));
   const secPlots = (list, cont) => (sl, x, y) => {
-    y = sec(sl, x, y, `공급 필지 (${ps.length}필지 · ${R.plotsSrc === '필지목록' ? '첨부 필지목록' : 'LH 상세페이지'} 기준)${cont ? ' — 계속' : ''}`);
+    y = sec(sl, x, y, `공급 필지 (${ps.length}필지 · ${R.plotsSrc === '필지목록' ? '첨부 필지목록' : R.plotsSrc === '공고문' ? '공고문' : 'LH 상세페이지'} 기준)${cont ? ' — 계속' : ''}`);
     y = gridTable(sl, ['블록·용지', '소재지·지번', '면적', '공급가격', '건폐율/용적률', '토지사용'], list.map(plotRow), x, y, FW, PCOLS);
     if (list[list.length - 1] === ps[Math.min(ps.length, 24) - 1] && ps.length > 24) { sl.addText(`외 ${ps.length - 24}필지는 원문 필지목록 참조`, { ...T, x, y, w: 6, h: 0.3, color: MUT, margin: 0 }); y += 0.32; }
     return y;
