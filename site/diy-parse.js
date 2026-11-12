@@ -38,12 +38,14 @@ async function xlsxToMd(ExcelJS, buf) {
     out.push(`\n## ${ws.name}\n`);
     ws.eachRow({ includeEmpty: false }, row => {
       const vals = [];
-      row.eachCell({ includeEmpty: false }, c => {
-        let v = c.value; if (v && typeof v === 'object') v = v.result != null ? v.result : (v.richText ? v.richText.map(t => t.text).join('') : (v.text || ''));
-        if (typeof v === 'number') v = Math.abs(v) < 1 && v !== 0 && c.numFmt && /%/.test(c.numFmt) ? (v * 100).toFixed(2) + '%' : String(Math.round(v * 100) / 100);
-        if (v != null && String(v).trim()) vals.push(String(v).trim());
-      });
-      if (vals.length) out.push(vals.length > 1 ? '| ' + vals.join(' | ') + ' |' : vals[0]);
+      for (let ci = 1; ci <= row.cellCount; ci++) {
+        const c = row.getCell(ci); let v = c.value;
+        if (v && typeof v === 'object') v = v.result != null ? v.result : (v.richText ? v.richText.map(t => t.text).join('') : (v.text || ''));
+        if (typeof v === 'number') v = Math.abs(v) < 1 && v !== 0 && c.numFmt && /%/.test(c.numFmt) ? (v * 100).toFixed(2) + '%' : String(Math.round(v * 10000) / 10000);
+        vals.push(v == null ? '' : String(v).replace(/\|/g, '/').replace(/\s+/g, ' ').trim());
+      }
+      while (vals.length && !vals[vals.length - 1]) vals.pop();
+      if (vals.some(Boolean)) out.push(vals.length > 1 ? '| ' + vals.join(' | ') + ' |' : vals[0]);
     });
   });
   const md = out.join('\n');
@@ -118,6 +120,76 @@ function parseDesignMd(md) {
   return { values: R, src, types, comm };
 }
 
-const api = { pdfToMd, xlsxToMd, parseDesignMd };
+// ── 토지조서·IM → 필지 목록 ────────────────────────────────────────────
+const JIMOK = { 대: '대', 전: '전', 답: '답', 임: '임야', 임야: '임야', 도: '도로', 도로: '도로', 잡: '잡종지', 잡종지: '잡종지', 구: '구거', 구거: '구거', 천: '하천', 하천: '하천',
+  공: '공원', 공원: '공원', 학: '학교용지', 학교용지: '학교용지', 주: '주차장', 주차장: '주차장', 창: '창고용지', 창고용지: '창고용지', 장: '공장용지', 공장용지: '공장용지',
+  종: '종교용지', 종교용지: '종교용지', 유: '유지', 유지: '유지', 철: '철도용지', 철도용지: '철도용지', 제: '제방', 제방: '제방', 수: '수도용지', 수도용지: '수도용지',
+  과: '과수원', 과수원: '과수원', 목: '목장용지', 목장용지: '목장용지', 광: '광천지', 염: '염전', 양: '양어장', 체: '체육용지', 체육용지: '체육용지', 사: '사적지', 묘: '묘지', 묘지: '묘지', 원: '유원지', 유원지: '유원지', 주유소용지: '주유소용지' };
+const ZONE_RX = /(제[12]종전용주거|제[123]종일반주거|[123]종일반주거|[12]종일주|[123]종일주|준주거|중심상업|일반상업|근린상업|유통상업|전용공업|일반공업|준공업|보전녹지|생산녹지|자연녹지|보전관리|생산관리|계획관리|농림|자연환경보전)(지역)?/;
+const ZONE_FULL = z => { if (!z) return ''; let t = z.replace(/지역$/, ''); t = t.replace(/^([123])종일(반)?주(거)?$/, '제$1종일반주거').replace(/^([12])종전용주거$/, '제$1종전용주거'); return t + '지역'; };
+const JIBUN_RX = /^(산\s*)?(\d{1,5})(?:-(\d{1,5}))?\s*(?:번지)?\s*([가-힣]{0,4})$/;
+const SIDO_RX = /(서울특별시|부산광역시|대구광역시|인천광역시|광주광역시|대전광역시|울산광역시|세종특별자치시|경기도|강원특별자치도|강원도|충청북도|충청남도|전북특별자치도|전라북도|전라남도|경상북도|경상남도|제주특별자치도)(\s+[가-힣]+(?:시|군|구))?(\s+[가-힣]+구)?/;
+function parseParcelsMd(md) {
+  const SHORT = { 서울시: '서울특별시', 서울: '서울특별시', 부산시: '부산광역시', 대구시: '대구광역시', 인천시: '인천광역시', 광주시: '광주광역시', 대전시: '대전광역시', 울산시: '울산광역시', 세종시: '세종특별자치시' };
+  const m2 = md.match(/(서울특별시|서울시|부산광역시|부산시|대구광역시|대구시|인천광역시|인천시|광주광역시|대전광역시|대전시|울산광역시|울산시|세종특별자치시|세종시|경기도|강원특별자치도|강원도|충청북도|충청남도|전북특별자치도|전라북도|전라남도|경상북도|경상남도|제주특별자치도)\s*([가-힣]+(?:시|군|구))?(?:\s+([가-힣]+구))?/);
+  const sido = m2 ? [SHORT[m2[1]] || m2[1], m2[2], m2[3]].filter(Boolean).join(' ') : '';
+  const sections = md.split(/\n(?=## )/);
+  const results = [];
+  for (const sec of sections) {
+    const title = (sec.match(/^## (.+)/) || ['', '문서'])[1].trim();
+    const rows = sec.split('\n').map(l => l.trim()).filter(l => l.startsWith('|')).map(l => l.replace(/^\||\|$/g, '').split('|').map(c => c.trim()));
+    // 머리글 찾기
+    let H = null, hi = -1;
+    rows.forEach((r, i) => {
+      if (H) return;
+      const idx = {}; r.forEach((c, j) => { const t = c.replace(/\s/g, '');
+        if (idx.jibun == null && /^(지번|번지|소재지번)$/.test(t)) idx.jibun = j;
+        if (idx.addr == null && /^(소재지|소재|위치|행정동|법정동|주소|소재지주소)$/.test(t)) idx.addr = j;
+        if (idx.jimok == null && /^지목/.test(t)) idx.jimok = j;
+        if (/편입면적/.test(t)) idx.inc = j; else if (idx.area == null && /^(면적|대장면적|공부면적|토지면적|지적면적)/.test(t)) idx.area = j;
+        if (idx.zone == null && /용도지역/.test(t)) idx.zone = j;
+        if (idx.price == null && /공시지가/.test(t)) idx.price = j;
+        if (idx.pnu == null && /^PNU$/i.test(t)) idx.pnu = j; });
+      if (idx.jibun != null && (idx.area != null || idx.inc != null || idx.jimok != null)) { H = idx; hi = i; }
+    });
+    const parcels = [];
+    const numOf = c => { const t = String(c || '').replace(/,/g, '').replace(/㎡|원/g, '').trim(); return /^-?\d+(\.\d+)?$/.test(t) ? +t : null; };
+    if (H) {
+      for (const r of rows.slice(hi + 1)) {
+        const jb = (r[H.jibun] || '').replace(/\s+/g, ' ').trim(), m = jb.match(JIBUN_RX);
+        if (!m) continue;
+        const san = !!m[1] || /^산/.test(jb), bon = +m[2], bu = m[3] ? +m[3] : 0;
+        const jm = (H.jimok != null && JIMOK[(r[H.jimok] || '').trim()]) || JIMOK[m[4]] || '';
+        const area = H.inc != null && numOf(r[H.inc]) != null ? numOf(r[H.inc]) : (H.area != null ? numOf(r[H.area]) : null);
+        const zr = H.zone != null ? (r[H.zone] || '').match(ZONE_RX) : null;
+        const addr = H.addr != null ? (r[H.addr] || '').replace(/\s+/g, ' ').trim() : '';
+        let pnu = '';
+        if (H.pnu != null) { const d = String(r[H.pnu] || '').replace(/\D/g, ''); if (d.length >= 19) pnu = d.slice(0, 19); else if (d.length >= 10) pnu = d.slice(0, 10) + (san ? '2' : '1') + String(bon).padStart(4, '0') + String(bu).padStart(4, '0'); }
+        const jibun = `${san ? '산' : ''}${bon}${bu ? '-' + bu : ''}`;
+        parcels.push({ jibun, addr: (addr && !/[가-힣]+(동|리|가)\d*$/.test(addr) && sido && !addr.includes(sido.split(' ')[0]) ? sido + ' ' : '') + addr, jimok: jm, area, zone: zr ? ZONE_FULL(zr[1]) : '', price: H.price != null ? numOf(r[H.price]) : null, pnu });
+      }
+    } else {
+      // 머리글 없는 표·문장: '○○동 11-22' 형태 + 숫자
+      let lastDong = '';
+      for (const r of rows) {
+        const line = r.join(' ');
+        const am = line.match(/([가-힣]+(?:동|리|가)\d?)\s*(산\s*)?(\d{1,5})(?:-(\d{1,5}))?\s*(?:번지)?/);
+        if (!am) continue;
+        lastDong = am[1];
+        const nums = r.filter(c => /[.,]\d|㎡/.test(c)).map(numOf).filter(v => v != null && v > 0 && v !== +am[3] && v !== +am[4]);
+        const zr = line.match(ZONE_RX), jm = r.map(c => JIMOK[c.trim()]).find(Boolean) || '';
+        parcels.push({ jibun: `${am[2] ? '산' : ''}${+am[3]}${am[4] ? '-' + +am[4] : ''}`, addr: (sido ? sido + ' ' : '') + lastDong, jimok: jm, area: nums.find(v => v >= 1 && v < 1e7) || null, zone: zr ? ZONE_FULL(zr[1]) : '', price: null, pnu: '' });
+      }
+    }
+    // 중복 제거
+    const seen = new Set(), uniq = parcels.filter(p => { const k = (p.pnu || p.addr + ' ' + p.jibun); if (seen.has(k)) return false; seen.add(k); return true; });
+    if (uniq.length) results.push({ title, header: !!H, parcels: uniq, area: uniq.reduce((a, p) => a + (p.area || 0), 0) });
+  }
+  // 문장 속 사업부지 요약(예: '서울시 용산구 문배동 11-22번지 일원 … 4,040.6㎡')
+  const site = (md.match(/([가-힣]+(?:시|도)\s+[가-힣]+(?:구|시|군)\s+[가-힣]+(?:동|리|가)\d?\s*\d+(?:-\d+)?\s*(?:번지)?\s*일원)/) || [''])[0];
+  return { sido, sections: results.sort((a, b) => b.parcels.length - a.parcels.length), site };
+}
+
+const api = { pdfToMd, xlsxToMd, parseDesignMd, parseParcelsMd };
 if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.diyParse = api;
 })(typeof window !== 'undefined' ? window : globalThis);

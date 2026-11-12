@@ -23,7 +23,7 @@ const ST = {
   step: 1, consent: false, title: '',
   parcels: [], s1: { donate: 0, far: null, bcr: null, height: null, sido: '' },
   s2: { mode: 'gen', use: '공동주택', commPct: 0, floors: 25, perFloor: 4, hh: null, opEx: 84, stall: 35, partial: false, checked: false },
-  design: null, files: [],
+  design: null, files: [], land: null,
   s3: { land: null, date: '', permit: 12, sale: null, rate: 100, priceMode: 'unit', price: null, mkt: null, mktRatio: 85, comm: null, cost: null, cover: 50, pfRate: 4.6, blRate: 6.0, blRate2: 8.0, build: null, landType: '민간택지', trust: '관리형토지신탁', midInt: '무이자', demol: null },
   result: null,
 };
@@ -59,7 +59,10 @@ async function lookupParcel(q) {
   const s = await vw(`https://api.vworld.kr/req/search?service=search&request=search&version=2.0&crs=EPSG:4326&size=1&page=1&type=address&category=parcel&format=json&errorformat=json&key=${key}&query=${encodeURIComponent(q)}`);
   const it = s && s.response && s.response.result && arr(s.response.result.items)[0];
   if (!it) throw new Error((s && s.response && s.response.error && s.response.error.text) || '지번을 찾지 못했습니다');
-  const pnu = it.id, addr = (it.address && (it.address.parcel || it.address.road)) || q;
+  return lookupPnu(it.id, (it.address && (it.address.parcel || it.address.road)) || q, q);
+}
+async function lookupPnu(pnu, addr, q) {
+  const key = vkey(), dom = location.hostname;
   const c = await vw(`https://api.vworld.kr/ned/data/getLandCharacteristics?key=${key}&domain=${dom}&pnu=${pnu}&format=json&numOfRows=100&pageNo=1`);
   const rows = arr(c && c.landCharacteristicss && c.landCharacteristicss.field).sort((a, b) => String(b.stdrYear).localeCompare(String(a.stdrYear)));
   const r0 = rows[0] || {};
@@ -69,7 +72,8 @@ async function lookupParcel(q) {
     uses = arr(u && u.landUses && u.landUses.field).map(x => ({ name: x.prposAreaDstrcCodeNm, rel: x.cnflcAtNm })).filter(x => x.name);
   } catch (e) { /* 토지이용계획 실패 시 토지특성만 */ }
   const zone = (r0.prposArea1Nm && r0.prposArea1Nm !== '지정되지않음') ? r0.prposArea1Nm : (uses.find(x => /지역$/.test(x.name) && D().NATIONAL[x.name]) || {}).name || '';
-  return { q, addr, pnu, area: nv(r0.lndpclAr), jimok: r0.lndcgrCodeNm || '', zone, price: nv(r0.pblntfPclnd), year: r0.stdrYear || '', uses, status: 'ok' };
+  if (!r0.stdrYear && !uses.length) throw new Error('토지정보가 없습니다');
+  return { q: q || addr, addr, pnu, area: nv(r0.lndpclAr), jimok: r0.lndcgrCodeNm || '', zone, price: nv(r0.pblntfPclnd), year: r0.stdrYear || '', uses, status: 'ok' };
 }
 const D = () => window.designEngine, E = () => window.fsEngine;
 
@@ -299,7 +303,8 @@ function nav(prev, next, nextLabel) {
 }
 function view1() {
   const A1 = analyze();
-  const rows = ST.parcels.map((p, i) => `<tr>
+  const MAXR = 40;
+  const rows = ST.parcels.slice(0, MAXR).map((p, i) => `<tr>
     <td>${esc(p.addr || p.q)}${p.pnu ? `<div class="small"><a href="https://www.eum.go.kr/web/ar/lu/luLandDet.jsp?pnu=${p.pnu}&mode=search&isNoScr=script" target="_blank" rel="noopener">토지이음 ↗</a></div>` : ''}${p.err ? `<div class="err">${esc(p.err)}</div>` : ''}</td>
     <td><input class="cell" data-pi="${i}" data-pk="area" value="${p.area ?? ''}" inputmode="decimal"></td>
     <td>${esc(p.jimok || '')}</td>
@@ -311,14 +316,19 @@ function view1() {
     <h2>STEP 1. 토지 분석</h2>
     <p class="lead">사업 부지의 지번을 입력하면 브이월드에서 면적·지목·용도지역·공시지가와 토지이용계획(지역·지구·구역)을 조회해 개발 가능 규모와 확인할 규제를 정리합니다. 조회가 안 되면 표에 직접 입력하세요.</p>
     <div class="consent"><label><input type="checkbox" id="consent" ${ST.consent ? 'checked' : ''}> <b>입력값과 업로드 파일이 사이트 운영자에게 전송·보관되는 데 동의합니다.</b></label>
-      <small>사업성 분석 품질 개선을 위한 데이터 수집 목적이며, 운영자 외에는 열람할 수 없습니다. 동의해야 진행할 수 있습니다.</small></div>
+      <small>사업성 분석 품질 개선을 위한 데이터 수집 목적이며, 운영자 외에는 열람할 수 없습니다. 토지조서 원본(소유자 정보)은 보내지 않고 인식된 필지 정보만 전송합니다. 동의해야 진행할 수 있습니다.</small></div>
     <div class="grid2">
       ${field('사업명', 'title', ST, { o: 'root', type: 'text', ph: '예) ○○동 주상복합' })}
-      <label class="fld"><span>지번 (한 줄에 하나, 합필 가능)</span><textarea id="jibun" rows="3" placeholder="○○시 ○○구 ○○동 123-4&#10;○○시 ○○구 ○○동 123-5">${esc(ST.parcels.map(p => p.q).join('\n'))}</textarea></label>
+      <label class="fld"><span>지번 (한 줄에 하나, 합필 가능)</span><textarea id="jibun" rows="3" placeholder="○○시 ○○구 ○○동 123-4&#10;○○시 ○○구 ○○동 123-5">${esc(ST.parcels.length > 60 ? '' : ST.parcels.map(p => p.q).join('\n'))}</textarea></label>
     </div>
+    <div class="drop sm"><input type="file" id="landfile" accept=".pdf,.xlsx,.xls,.csv"><span>IM·토지조서 파일 업로드 (PDF·엑셀) — 지번·지목·면적·공시지가 자동 인식</span></div>
+    <div id="lstat" class="small"></div>
+    ${ST.land ? `<div class="sum land"><b>${esc(ST.land.name)}</b> — ${ST.land.sections.length > 1 ? `<select id="lsec">${ST.land.sections.map((s, i) => `<option value="${i}"${i === ST.land.pick ? ' selected' : ''}>${esc(s.title)} · ${s.parcels.length}필지 · ${f0(s.area)}㎡</option>`).join('')}</select>` : `${esc(ST.land.sections[0].title)}`}
+      <span class="small">${ST.parcels.length}필지 · 면적 합계 ${f0(analyze().total)}㎡ 인식 (편입면적 우선). 소유자 등 개인정보는 읽지 않습니다. 숫자는 표에서 고칠 수 있습니다.</span>
+      <div class="row"><button class="btn ghost sm" data-act="vfill">용도지역·공시지가 보완 조회 (브이월드)</button></div></div>` : ''}
     <div class="row"><button class="btn" data-act="lookup">토지 조회</button><button class="btn ghost" data-act="addrow">직접 입력 행 추가</button>
       <details class="key"><summary>브이월드 인증키 ${vkey() ? '(설정됨)' : '(미설정)'}</summary><div class="row"><input id="vkey" placeholder="인증키 입력 — 이 브라우저에만 저장" value=""><button class="btn ghost" data-act="savekey">저장</button></div><small>vworld.kr → 오픈API → 인증키 발급(서비스 URL: ${location.hostname}). 운영자 설정 키가 있으면 자동 사용.</small></details></div>
-    <div class="tw"><table class="pt"><thead><tr><th>지번</th><th>면적(㎡)</th><th>지목</th><th>용도지역</th><th>공시지가(원/㎡)</th><th>지역·지구·구역</th><th></th></tr></thead><tbody>${rows || '<tr><td colspan="7" class="small">지번을 입력하고 조회하세요.</td></tr>'}</tbody></table></div>
+    <div class="tw"><table class="pt"><thead><tr><th>지번</th><th>면적(㎡)</th><th>지목</th><th>용도지역</th><th>공시지가(원/㎡)</th><th>지역·지구·구역</th><th></th></tr></thead><tbody>${rows || '<tr><td colspan="7" class="small">지번을 입력해 조회하거나 IM·토지조서 파일을 올리세요.</td></tr>'}${ST.parcels.length > MAXR ? `<tr><td colspan="7" class="small">외 ${ST.parcels.length - MAXR}필지 — 합계·분석에는 모두 반영</td></tr>` : ''}</tbody></table></div>
     ${A1.total > 0 ? `<div class="sum">
       <div class="kpis"><div><small>합계 면적</small><b>${f2(A1.total)}㎡</b><em>${f2(A1.total * PY)}평</em></div>
         <div><small>대표 용도지역</small><b>${esc(A1.main || '-')}</b><em>${A1.zones.length > 1 ? '복수 용도지역' : ''}</em></div>
@@ -450,6 +460,9 @@ function bind() {
   $$('.dt').forEach(el => el.addEventListener('change', () => { const t = ST.design.types[+el.dataset.ti]; t[el.dataset.tk] = /name|use/.test(el.dataset.tk) ? el.value : nv(el.value); if (el.dataset.tk === 'use') ST.design.use = ST.design.types.some(x => x.use === '오피스텔') ? '오피스텔' : '공동주택'; ST.s2.checked = false; later(); }));
   $$('.dc').forEach(el => el.addEventListener('change', () => { ST.design.comm = ST.design.comm || {}; ST.design.comm[el.dataset.ck] = nv(el.value); if (!nv(ST.design.comm.sup)) ST.design.comm = null; ST.s2.checked = false; later(); }));
   $$('[data-tdel]').forEach(b => b.onclick = () => { ST.design.types.splice(+b.dataset.tdel, 1); later(); });
+  const lf = $('#landfile');
+  if (lf) { const dz = lf.parentElement; ['dragover', 'dragenter'].forEach(e => dz.addEventListener(e, ev => { ev.preventDefault(); dz.classList.add('over'); })); ['dragleave', 'drop'].forEach(e => dz.addEventListener(e, () => dz.classList.remove('over'))); lf.onchange = () => lf.files[0] && handleLandFile(lf.files[0]); }
+  const ls = $('#lsec'); if (ls) ls.onchange = () => { applyLand(+ls.value); later(); };
   const fi = $('#file');
   if (fi) {
     const drop = fi.parentElement;
@@ -458,6 +471,40 @@ function bind() {
     fi.onchange = () => handleFiles([...fi.files]);
   }
   $$('[data-act]').forEach(b => b.onclick = () => act(b.dataset.act, b));
+}
+async function handleLandFile(file) {
+  const st = $('#lstat'); st.textContent = '파일을 읽는 중…';
+  try {
+    const buf = await file.arrayBuffer(); let md = '';
+    if (/pdf$/i.test(file.name) || file.type === 'application/pdf') { await loadLib('pdf'); window.pdfjsLib.GlobalWorkerOptions.workerSrc = LIB.pdfWorker; md = (await window.diyParse.pdfToMd(window.pdfjsLib, new Uint8Array(buf))).md; }
+    else if (/\.(xlsx|xls|csv)$/i.test(file.name)) { await loadLib('xlsx'); md = (await window.diyParse.xlsxToMd(window.ExcelJS, buf)).md; }
+    else { st.textContent = 'PDF·엑셀 파일만 인식할 수 있습니다.'; return; }
+    const r = window.diyParse.parseParcelsMd(md);
+    if (!r.sections.length) { st.textContent = '지번 목록을 찾지 못했습니다' + (r.site ? ` (문서상 부지: ${r.site})` : '') + ' — 지번을 직접 입력하세요.'; return; }
+    ST.land = { name: file.name, sido: r.sido, site: r.site, sections: r.sections, pick: 0 };
+    applyLand(0);
+    collect('land_file', { file: { name: file.name, type: file.type, size: file.size, parcels: r.sections[0].parcels.length } });   // 원본(소유자 등 개인정보)은 보내지 않음
+  } catch (e) { st.textContent = '파일 처리 오류: ' + e.message; return; }
+  render();
+}
+function applyLand(i) {
+  const L = ST.land; L.pick = i; const sec = L.sections[i];
+  ST.parcels = sec.parcels.map(p => ({ q: `${p.addr} ${p.jibun}`.trim(), addr: `${p.addr} ${p.jibun}`.trim(), pnu: p.pnu, area: p.area, jimok: p.jimok, zone: p.zone, price: p.price, uses: [], src: 'file' }));
+  if (L.sido) ST.s1.sido = L.sido.split(' ')[0];
+}
+async function fillFromVworld(btn) {
+  if (!vkey()) return alertBox('브이월드 인증키가 없어 보완 조회를 할 수 없습니다.');
+  const todo = ST.parcels.filter(p => !p.uses || !p.uses.length).slice(0, 300);
+  let done = 0, fail = 0; btn.disabled = true;
+  for (const p of todo) {
+    btn.textContent = `조회 중… ${done + fail}/${todo.length}`;
+    try {
+      const r = p.pnu ? await lookupPnu(p.pnu, p.addr, p.q) : await lookupParcel(p.q);
+      p.pnu = r.pnu; p.uses = r.uses; p.zone = p.zone || r.zone; p.price = p.price || r.price; p.jimok = p.jimok || r.jimok; p.year = r.year; if (p.area == null) p.area = r.area; p.err = ''; done++;
+    } catch (e) { p.err = '보완 조회 실패: ' + e.message; fail++; }
+  }
+  alertBox(`보완 조회 ${done}필지 완료${fail ? `, ${fail}필지 실패` : ''}`);
+  render();
 }
 async function handleFiles(files) {
   const st = $('#fstat'); st.textContent = '파일을 읽는 중…';
@@ -480,6 +527,7 @@ async function act(a, btn) {
     ST.step++; render(); return;
   }
   if (a === 'prev') { ST.step--; render(); return; }
+  if (a === 'vfill') { await fillFromVworld(btn); return; }
   if (a === 'addrow') { ST.parcels.push({ q: '직접 입력', area: null, zone: '', price: null, uses: [] }); render(); return; }
   if (a === 'savekey') { try { localStorage.setItem('diy_vworld', $('#vkey').value.trim()); } catch (e) { /* 무시 */ } render(); return; }
   if (a === 'lookup') {
