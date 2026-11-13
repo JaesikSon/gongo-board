@@ -10,6 +10,7 @@ const nv = v => { if (v === '' || v == null) return null; const x = parseFloat(S
 const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const LIB = {
   xlsx: 'https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js',
+  docx: 'https://cdn.jsdelivr.net/npm/docx@8.5.0/build/index.umd.js',
   pdf: 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js',
   pdfWorker: 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js',
   ocr: 'https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js',
@@ -310,8 +311,8 @@ const DIY_DEF = {
   인허가기간: 12, 공사기간입력: '', 계약일: '', 공급가격: 0, 대지: 0, 용적률: 0, 연면적배수: 1.5, 세대수: 0, 층수: 25, 근생비율: 0, 시세: 0, 시세반영률: 0.85, 상가시세: 0, 발코니: 10000,
   기본형_지상: 2328, 기본형_지하비: 0.43, 건축가산률: 0.38, 법정이자율: 0.045, 상한_취득세: 0.05, 택지가산률: 0.06, 말뚝률: 0.02042, 흙막이률: 0.0214,
   계약률: 0.1, 할부간격: 3, 할부회차: 1, 할부이자율: 0, 취득세등기: 0.048, 재산세율: 0.0048, 계약금비율: 0.1, 중도금비율: 0.6, 잔금비율: 0.3,
-  인입_평당: 20, 설계_평당: 55, 감리_평당: 110, 표준건축비: 2392, 미술률: 0.001, 용역비: 1000000, 지역난방_m2: 14.04, 기타부담금: 500000, 광고률: 0.005,
-  MH: 2200000, MH운영: 30000, 분양수수료: 3000, 분양보증률: 0.0029, 보존등기률: 0.032, 신탁: 250000, 관리비_월: 30000, 입주관리: 1000, 예비비률: 0.0035, 기타비기준: 0.28,
+  인입_평당: 20, 설계_평당: 80, 감리_평당: 110, 표준건축비: 2392, 미술률: 0.001, 용역비: 1000000, 지역난방_m2: 14.04, 기타부담금: 500000, 광고률: 0.005,
+  MH: 2200000, MH운영: 30000, 분양수수료: 8000, 분양보증률: 0.0029, 보존등기률: 0.032, 신탁: 250000, 관리비_월: 30000, 입주관리: 1000, 예비비률: 0.0035, 기타비기준: 0.28,
   BL선순위비중: 0.64, BL선순위취급: 0.005, BL후순위취급: 0.03, BL자문: 0.005, PF자문: 0.005, PF보증률: 0.00848, 최소현금: 500000, Equity입력: '', 목표이익률: 0.1, 공사비확보율: 0.5,
 };
 // 평형 묶음: 59A·59B → 59, 84A·84B → 84 (이름 앞 숫자, 없으면 전용면적 반올림)
@@ -353,7 +354,7 @@ function specOf() {
     택지구분: s3.landType || '민간택지', 주거용도: op ? '오피스텔' : '아파트', 신탁유형: s3.trust || '관리형토지신탁', 신탁: 300000,
     중도금이자방식: s3.midInt || '무이자', 근생중도금이자방식: s3.midInt || '무이자', 철거비: nv(s3.demol) ? Math.round(nv(s3.demol) * 1e5) : 0,
     광역부과율: /서울|경기|인천/.test(ST.parcels.map(p => p.addr || p.q).join(' ') + ST.s1.sido) ? 0.04 : 0.02,
-    발코니: op ? 0 : 10000, 분양수수료: op ? Math.round(unitPrice * 0.03) : 3000, 광고률: op ? 0.01 : 0.005,
+    발코니: op ? 0 : 10000, 분양수수료: op ? Math.round(unitPrice * 0.03) : 8000, 광고률: op ? 0.01 : 0.005,
   });
   const today = new Date().toISOString().slice(0, 10);
   const design = { 지상, 지하: nv(d.지하), 연면적: nv(d.연면적), 지하층: nv(d.지하층), 최고층: nv(d.지상층), 동수: nv(d.동수) || 1, 건축면적: nv(d.건축면적) || 0,
@@ -396,6 +397,70 @@ async function download() {
   const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
   a.download = S.name; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 2000);
   collect('download');
+}
+
+// ── 사업성 요약 (Word) ─────────────────────────────────────────────────
+async function downloadSummary() {
+  const { S, r, 판정 } = runFs(), A = S.A, d = r.d, Dg = ST.design, s3 = ST.s3;
+  await loadLib('docx');
+  const X = window.docx, F = '맑은 고딕';
+  const eok = v => (Math.round(v / 1e5 * 10) / 10).toLocaleString() + '억';   // 천원 → 억
+  const pc = v => (v * 100).toFixed(1) + '%';
+  const ym = m => { const t = new Date(A.계약일 || Date.now()); t.setMonth(t.getMonth() + m); return `${t.getFullYear()}.${String(t.getMonth() + 1).padStart(2, '0')}`; };
+  const T = (t, o = {}) => new X.TextRun({ text: String(t), font: F, size: o.size || 20, bold: o.b, color: o.c });
+  const P = (t, o = {}) => new X.Paragraph({ children: Array.isArray(t) ? t : [T(t, o)], spacing: { after: o.after ?? 80 }, alignment: o.al });
+  const H = t => new X.Paragraph({ children: [T(t, { size: 24, b: true, c: '1F5F4A' })], spacing: { before: 240, after: 100 } });
+  const bd = { style: X.BorderStyle.SINGLE, size: 4, color: 'BFBFBF' }, BD = { top: bd, bottom: bd, left: bd, right: bd };
+  const cell = (t, o = {}) => new X.TableCell({ children: [P(t, { b: o.b, size: 18, after: 0, al: o.al })], shading: o.fill ? { fill: o.fill, type: X.ShadingType.CLEAR, color: 'auto' } : undefined, borders: BD, margins: { top: 50, bottom: 50, left: 90, right: 90 }, width: o.w ? { size: o.w, type: X.WidthType.PERCENTAGE } : undefined });
+  const table = (rows, head, ws) => new X.Table({ width: { size: 100, type: X.WidthType.PERCENTAGE }, rows: [
+    ...(head ? [new X.TableRow({ tableHeader: true, children: head.map((h, i) => cell(h, { b: true, fill: 'E3EFE9', w: ws && ws[i] })) })] : []),
+    ...rows.map(rw => new X.TableRow({ children: rw.map((c, i) => cell(c, { w: ws && ws[i], al: i > 0 && /^[-\d.,]+(억|%|평|㎡|세대|실|개월|만원\/평)?$/.test(String(c)) ? X.AlignmentType.RIGHT : undefined, b: i === 0 && !head })) }))] });
+  const kv = rows => table(rows.filter(x => x[1] != null && x[1] !== ''), null, [32, 68]);
+  // 민감도 (엔진 재계산)
+  const run = a => E().run(Object.assign({}, A, a));
+  const px = A.분양가입력 || r.price, sens = [
+    ['분양가 −5%', run({ 분양가입력: px * 0.95 })], ['분양가 +5%', run({ 분양가입력: px * 1.05 })],
+    ['공사비 −5%', run({ 공사비평당: A.공사비평당 * 0.95 })], ['공사비 +5%', run({ 공사비평당: A.공사비평당 * 1.05 })],
+    ['분양률 90%', run({ 분양률: 0.9 })], ['인허가 +6개월', run({ 인허가기간: (A.인허가기간 || 12) + 6 })]];
+  const groups = typeGroups(Dg), op = Dg.use === '오피스텔', unit = op ? '실' : '세대';
+  const parcels = ST.parcels || [], area = parcels.reduce((a, p) => a + (nv(p.area) || 0), 0);
+  const kids = [
+    new X.Paragraph({ children: [T(`${ST.title || '사업성 검토'} — 사업성 검토 요약`, { size: 32, b: true })], spacing: { after: 60 } }),
+    P(`작성 ${new Date().toLocaleDateString('ko-KR')} · 사업성 DIY 입력값 기준 · 검토자 가정에 따라 결과가 달라집니다`, { size: 17, c: '6B6F76', after: 160 }),
+    H('1. 결론'),
+    table([[판정, eok(r.매출), eok(r.이익), pc(r.이익률), r.자금부족 ? '자금부족' : '부족 없음']], ['판정', '총매출', '사업이익', '이익률', '자금']),
+    P(`목표 이익률 ${pc(A.목표이익률 || 0.1)} 기준 · ROE ${Math.round(r.ROE * 100).toLocaleString()}% (이익 ÷ Equity)`, { size: 18, after: 0 }),
+    H('2. 사업 개요'),
+    kv([['사업명', ST.title], ['공고', ST.notice && ST.notice.title !== ST.title ? ST.notice.title : ST.notice ? `${ST.notice.org || ''} 공고` : ''], ['위치', parcels.slice(0, 3).map(p => p.q || p.addr).join(', ') + (parcels.length > 3 ? ` 외 ${parcels.length - 3}필지` : '')],
+      ['대지면적', `${f0(area || Dg.대지)}㎡ (${f0((area || Dg.대지) * PY)}평)`], ['용도지역', [...new Set(parcels.map(p => p.zone).filter(Boolean))].join(', ')],
+      ['토지 매입가', `${eok(A.공급가격)} (대지 평당 ${f0(A.공급가격 / ((area || Dg.대지) * PY) / 10)}만원) · ${A.택지구분}`],
+      ['토지대금 납부', `${(A.토지일정 || []).map(([m, x]) => `${m}개월 ${Math.round(x * 1000) / 10}%`).join(' · ')}${A.선납할인율 ? ` · 선납할인 연 ${pc(A.선납할인율)} (${eok(r.선납할인 || 0)})` : ''}`]]),
+    H('3. 설계개요'),
+    kv([['연면적', `${f0(Dg.연면적 || (nv(Dg.지상) + nv(Dg.지하)))}㎡ (${f0((Dg.연면적 || (nv(Dg.지상) + nv(Dg.지하))) * PY)}평) — 지상 ${f0(Dg.지상)}㎡ · 지하 ${f0(Dg.지하)}㎡`],
+      ['규모', `지하 ${Dg.지하층 || '-'}층 / 지상 ${Dg.지상층 || '-'}층 · 용적률 ${Dg.대지 ? pc(nv(Dg.지상) / nv(Dg.대지)) : '-'}`], ['주차', Dg.주차 ? `${f0(Dg.주차)}대` : ''],
+      [`${unit}수`, `${f0(groups.reduce((a, g) => a + g.count, 0))}${unit}${Dg.comm ? ` · 근생 ${f0(nv(Dg.comm.sup))}㎡` : ''}`]]),
+    H('4. 분양가'),
+    table(groups.map(g => { const pxg = gPrice(g, s3), u = pxg ? pxg * g.sup * PY / 1e4 : 0; return [`${g.key}타입`, `${f2(g.ex)}㎡`, `${f2(g.sup * PY)}평`, `${f0(g.count)}${unit}`, pxg ? `${f0(pxg)}만원/평` : '-', u ? `${u.toFixed(2)}억` : '-', u ? `${f0(u * g.count)}억` : '-']; }),
+      ['타입', '전용', '공급', `${unit}수`, '공급평당', `${unit}당`, '매출']),
+    P(`분양기간 ${A.분양기간}개월 · 분양률 ${pc(A.분양률)} · 중도금 ${A.중도금이자방식}${A.상가시세 && Dg.comm ? ` · 근생 전용평당 ${f0(nv(s3.comm))}만원` : ''}${A.택지구분 === '공공택지' && r.cap ? ` · 상한제 상한 약 ${f0(r.cap / 10)}만원/평` : ''}`, { size: 18 }),
+    H('5. 사업수지'),
+    table([['총매출', eok(r.매출), '100.0%'], ['토지비', eok(r.토지비), pc(r.토지비 / r.매출)], ['공사비', eok(r.공사비), pc(r.공사비 / r.매출)],
+      ['기타사업비 (금융비 포함)', eok(r.기타비), pc(r.기타비 / r.매출)], ['사업이익', eok(r.이익), pc(r.이익률)]], ['구분', '금액', '매출 대비'], [50, 25, 25]),
+    P(`공사비 연면적 평당 ${f0(A.공사비평당 / 10)}만원 · 공사기간 ${d.공기}개월`, { size: 18 }),
+    H('6. 자금·일정'),
+    kv([['자금 구조', `Equity ${eok(r.Eq)} · 브릿지론 ${eok(r.BL || 0)} · PF ${eok(r.PF)} (공사비 확보율 ${pc(A.공사비확보율)})`],
+      ['금리', `PF 선순위 ${pc(A.PF선순위금리 ?? A.PF금리 ?? 0)}${r.BL ? ` · BL 선순위 ${pc(A.BL선순위금리 ?? 0)} / 후순위 ${pc(A.BL후순위금리 ?? 0)}` : ' · 브릿지론 없음'}`],
+      ['일정', `계약 ${ym(0)} → 착공·분양 ${ym(d.PFm)} (${d.PFm}개월차) → 준공 ${ym(d.준공)} → 입주 ${ym(d.준공 + (A.잔금기간 || 2))}`]]),
+    H('7. 민감도 (이익률)'),
+    table(sens.map(([k, x]) => [k, pc(x.이익률), eok(x.이익), x.자금부족 ? '자금부족' : '']), ['조건', '이익률', '사업이익', '비고'], [34, 22, 22, 22]),
+    H('8. 확인할 사항'),
+    ...S.summary.filter(([k]) => !/^공고$/.test(k)).map(([k, t]) => P([T(`${k}  `, { b: true, size: 18 }), T(t, { size: 18 })])),
+    P('본 요약은 입력값과 당사 표준 단가로 계산한 개략 검토입니다. 상세 수치는 함께 내려받는 사업성 엑셀(가정 시트)에서 바꿔 볼 수 있습니다.', { size: 16, c: '6B6F76' })];
+  const doc = new X.Document({ styles: { default: { document: { run: { font: F } } } }, sections: [{ properties: { page: { margin: { top: 1000, bottom: 1000, left: 1000, right: 1000 } } }, children: kids }] });
+  const blob = await X.Packer.toBlob(doc);
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = S.name.replace('_사업성검토_', '_사업성요약_').replace(/\.xlsx$/, '.docx');
+  document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 2000);
+  collect('summary');
 }
 
 // ── 화면 ─────────────────────────────────────────────────────────────
@@ -595,8 +660,8 @@ function view4() {
       <div><small>사업이익</small><b>${억(r.이익)}</b><em>이익률 ${(r.이익률 * 100).toFixed(1)}%</em></div>
       <div><small>자금</small><b>${r.자금부족 ? '자금부족' : '부족 없음'}</b><em>Equity ${억(r.Eq)} · BL ${억(r.BL)} · PF ${억(r.PF)}</em></div></div>
     <ul class="flags">${S.summary.map(([k, t]) => `<li><b>${esc(k)}</b> ${esc(t)}</li>`).join('')}${r.자금부족 ? '<li><b>자금</b> 운영계좌 현금이 마이너스인 달이 있습니다 — 공사비 확보율이나 Equity를 높여 보세요.</li>' : ''}</ul>
-    <div class="row"><button class="btn big" data-act="dl">사업성 엑셀 다운로드</button><button class="btn ghost" data-act="save">작업 저장(JSON)</button></div>
-    <p class="small">엑셀: 요약 · 사업수지 · 건축개요 · CF(VAT분리) · 분양가 · 가정 · 민감도. 가정 시트의 주황 칸을 바꾸면 전체가 다시 계산됩니다.</p>
+    <div class="row"><button class="btn big" data-act="sumdl">요약 내려받기 (Word)</button><button class="btn big" data-act="dl">사업성 엑셀 다운로드</button><button class="btn ghost" data-act="save">작업 저장(JSON)</button></div>
+    <p class="small">요약(Word): 결론 · 사업 개요 · 설계개요 · 타입별 분양가 · 사업수지 · 자금·일정 · 민감도 · 확인할 사항. 엑셀: 요약 · 사업수지 · 건축개요 · CF(VAT분리) · 분양가 · 가정 · 민감도. 가정 시트의 주황 칸을 바꾸면 전체가 다시 계산됩니다.</p>
     ${nav(true, false)}</section>`;
 }
 const later = () => setTimeout(render, 0);
@@ -711,6 +776,7 @@ async function act(a, btn) {
   }
   if (a === 'gen') { try { ST.design = generate(); ST.s2.checked = false; } catch (e) { return alertBox(e.message); } render(); return; }
   if (a === 'addtype') { ST.design.types.push({ name: '', use: ST.design.use, ex: null, sup: null, con: null, count: null }); render(); return; }
+  if (a === 'sumdl') { btn.disabled = true; btn.textContent = '요약 만드는 중…'; try { await downloadSummary(); } catch (e) { alertBox('요약 생성 오류: ' + e.message); } btn.disabled = false; btn.textContent = '요약 내려받기 (Word)'; return; }
   if (a === 'dl') { btn.disabled = true; btn.textContent = '엑셀 만드는 중…'; try { await download(); } catch (e) { alertBox('엑셀 생성 오류: ' + e.message); } btn.disabled = false; btn.textContent = '사업성 엑셀 다운로드'; return; }
   if (a === 'save') {
     const s = JSON.stringify({ ...ST, files: ST.files.map(f => ({ name: f.name, size: f.size, kind: f.kind })), result: null }, null, 1);
