@@ -1,0 +1,529 @@
+"""오프라인 테스트: python -m pytest tests -q"""
+import sys
+from datetime import datetime
+from pathlib import Path
+
+from bs4 import BeautifulSoup
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "collector"))
+
+import boards  # noqa: E402
+import lh  # noqa: E402
+import onbid  # noqa: E402
+import results  # noqa: E402
+from common import KST, norm_date, org_type, sido_of  # noqa: E402
+
+NOW = datetime(2026, 9, 30, 9, 0, tzinfo=KST)
+
+
+def test_norm_date():
+    assert norm_date("202610011000") == "2026-10-01 10:00"
+    assert norm_date("20261001") == "2026-10-01"
+    assert norm_date("2026.10.1") == "2026-10-01"
+    assert norm_date("") == ""
+
+
+def test_org_type_and_sido():
+    assert org_type("한국토지주택공사 경기남부지역본부") == "LH"
+    assert org_type("서울주택도시개발공사") == "SH"
+    assert org_type("화성도시공사") == "기초 도시공사"
+    assert org_type("경기주택도시공사") == "GH" and org_type("인천도시공사") == "iH"
+    assert org_type("대구도시개발공사") == "광역 도시·개발공사" and org_type("충청남도개발공사") == "광역 도시·개발공사"
+    assert org_type("부산도시공사") == "광역 도시·개발공사" and org_type("하남도시공사") == "기초 도시공사"
+    assert org_type("한국자산관리공사") == "캠코"
+    assert org_type("무궁화신탁") == "신탁사"
+    assert org_type("수원시") == "지자체"
+    assert sido_of("경기도", "") == "경기"
+    assert sido_of("", "충청남도 천안시") == "충남"
+
+
+def _row(no, nsq, bgn, end, **kw):
+    base = {"cltrMngNo": no, "pbctNsq": nsq, "cltrBidBgngDt": bgn, "cltrBidEndDt": end,
+            "onbidCltrNm": "경기도 화성시 동탄 토지", "lctnSdnm": "경기도", "lctnSggnm": "화성시",
+            "orgNm": "화성도시공사", "prptDivNm": "기타일반재산", "dspsMthodNm": "매각",
+            "cltrUsgMclsCtgrNm": "토지", "cltrUsgSclsCtgrNm": "대지",
+            "apslEvlAmt": "100000000", "lowstBidPrcIndctCont": "90000000", "pbctStatCd": "0002",
+            "pbctStatNm": "0002", "landSqms": "5200.5", "pvctTrgtYn": "N",
+            "onbidCltrno": 1, "onbidPbancNo": 2, "pbctNo": 3, "pbctCdtnNo": 4, "prptDivCd": "0005"}
+    base.update(kw)
+    return base
+
+
+def test_onbid_groups_current_round_and_filters():
+    raw = [
+        _row("A1", "1", "202609010900", "202609031700"),              # 종료 회차
+        _row("A1", "2", "202609290900", "202610011700"),              # 현재 회차
+        _row("A1", "3", "202610060900", "202610081700", lowstBidPrcIndctCont="81000000"),
+        _row("B2", "1", "202609290900", "202610011700", dspsMthodNm="임대"),  # 임대 제외
+        _row("C3", "1", "202608010900", "202608031700"),              # 전부 종료 → 제외
+    ]
+    recs = onbid.to_records(raw, now=NOW)
+    assert [r["id"] for r in recs] == ["onbid:A1"]
+    r = recs[0]
+    assert r["minp"] == 90000000 and r["ratio"] == 90.0
+    assert r["status"] == "입찰진행중"
+    assert r["ot"] == "기초 도시공사" and r["sido"] == "경기"
+    assert r["end"] == "2026-10-01 17:00"
+    assert r["url"].startswith(onbid.DETAIL_BASE) and "pbctCdtnNo=" in r["url"]
+
+
+def test_onbid_real_response_shape_and_placeholder_dates():
+    # 2026-10-01 실제 API 응답에서 발췌 (숫자형 금액, 2999 자리표시 날짜)
+    data = {"header": {"resultCode": "00", "resultMsg": "NORMAL_CODE"}, "body": {"items": {"item": [
+        {"cltrMngNo": "2022-0100-002855", "pbctNsq": "2", "prptDivNm": "기타일반재산", "dspsMthodNm": "매각",
+         "cltrUsgMclsCtgrNm": "상가용및업무용건물", "cltrUsgSclsCtgrNm": "근린생활시설",
+         "onbidCltrNm": "경기도 평택시 장당동 483-6 201호 근린생활시설", "usbdNft": 1, "pvctTrgtYn": "N",
+         "cltrBidBgngDt": "299912301000", "cltrBidEndDt": "299912301600", "apslEvlAmt": 256000000,
+         "lowstBidPrcIndctCont": "373248000", "lctnSdnm": "경기도", "lctnSggnm": "평택시", "lctnEmdNm": "장당동",
+         "rqstOrgNm": None, "orgNm": "코리아신탁주식회사", "landSqms": 62.453, "bldSqms": 94.113,
+         "pbctStatCd": "0001", "pbctStatNm": "입찰준비중"}]}, "numOfRows": 3, "pageNo": 1, "totalCount": 14733}}
+    items, err = onbid.parse_response(data)
+    assert err is None and len(items) == 1
+    assert onbid.to_records(items, now=NOW) == []  # 상가(근린생활시설)는 토지 전용에서 제외
+    items[0].update(cltrUsgMclsCtgrNm="토지", cltrUsgSclsCtgrNm="대지")
+    assert onbid.to_records(items, now=NOW) == []  # 신탁사 물건은 개발용지 모드에서 제외
+    items[0].update(orgNm="화성도시공사", landSqms=6000.123, onbidCltrNm="경기도 평택시 장당동 483-6 대지")
+    r = onbid.to_records(items, now=NOW)[0]
+    assert r["bgn"] == "" and r["end"] == ""
+    assert r["apsl"] == 256000000 and r["minp"] == 373248000
+    assert r["ot"] == "기초 도시공사" and r["sido"] == "경기" and r["area"] == 6000.12
+    assert r["status"] == "입찰준비중" and r["fails"] == 1
+
+
+def test_onbid_parse_response_variants():
+    items, err = onbid.parse_response({"header": {"resultCode": "00"}, "body": {"items": {"item": {"cltrMngNo": "X"}}}})
+    assert err is None and items == [{"cltrMngNo": "X"}]
+    items, err = onbid.parse_response({"response": {"header": {"resultCode": "03", "resultMsg": "NODATA_ERROR"}}})
+    assert items == [] and err is None
+    _, err = onbid.parse_response({"header": {"resultCode": "30", "resultMsg": "SERVICE_KEY_IS_NOT_REGISTERED"}})
+    assert err and "30" in err
+
+
+def test_lh_parse_nested():
+    data = [{"dsSch": [{"PG_SZ": "100"}]},
+            {"dsList": [{"PAN_ID": "2015122300012345", "PAN_NM": "화성동탄2 상업용지 공급공고",
+                         "CNP_CD_NM": "경기도", "PAN_SS": "공고중", "PAN_NT_ST_DT": "2026.09.25",
+                         "CLSG_DT": "2026.10.10", "DTL_URL": "https://apply.lh.co.kr/x", "AIS_TP_CD_NM": "상업용지"}],
+             "resHeader": [{"SS_CODE": "Y"}]}]
+    recs = lh.parse(data, "토지")
+    assert len(recs) == 1
+    assert recs[0]["posted"] == "2026-09-25" and recs[0]["end"] == "2026-10-10"
+    assert recs[0]["sido"] == "경기" and recs[0]["ot"] == "LH"
+
+
+BOARD_HTML = """
+<table><tbody>
+<tr><td>12</td><td><a href="view.do?id=12">2026년 동탄 상업용지 매각 공고</a></td><td>2026-09-20</td></tr>
+<tr><td>11</td><td><a href="view.do?id=11">2026년 하반기 신규직원 채용 공고</a></td><td>2026-09-19</td></tr>
+<tr><td>10</td><td><a href="view.do?id=10">청년 매입임대주택 입주자 모집</a></td><td>2026-09-18</td></tr>
+<tr><td>9</td><td><a href="javascript:fn_view(9)">잔여 필지 수의계약 공급 안내</a></td><td>2026.09.15</td></tr>
+<tr><td>3</td><td><a href="view.do?id=3">옛날 토지 매각 공고</a></td><td>2025-01-01</td></tr>
+</tbody></table>
+"""
+
+
+def test_board_extract_keywords_and_dates():
+    soup = BeautifulSoup(BOARD_HTML, "html.parser")
+    src = {"name": "테스트도시공사", "sido": "경기", "type": "지방공기업"}
+    recs = boards.extract_notices("https://ex.or.kr/board/list.do", soup, src, since="2026-06-01")
+    titles = [r["title"] for r in recs]
+    assert titles == ["2026년 동탄 상업용지 매각 공고", "잔여 필지 수의계약 공급 안내"]
+    assert recs[0]["url"] == "https://ex.or.kr/board/view.do?id=12"
+    assert recs[1]["url"] == "https://ex.or.kr/board/list.do"  # JS 링크는 게시판으로
+    assert recs[0]["posted"] == "2026-09-20"
+
+
+RESULT_HTML = """
+<ul>
+<li><a href="v?1">동탄 상업용지 매각 개찰결과 공고</a> 2026-09-25</li>
+<li><a href="v?2">청사 청소용역 낙찰자 공고</a> 2026-09-25</li>
+<li><a href="v?3">잔여 필지 수의계약 공급 안내</a> 2026-09-20</li>
+</ul>"""
+
+
+def test_board_result_posts_are_marked():
+    soup = BeautifulSoup(RESULT_HTML, "html.parser")
+    src = {"name": "테스트도시공사", "sido": "경기", "type": "지방공기업"}
+    recs = boards.extract_notices("https://ex.or.kr/b/", soup, src, since="2026-06-01")
+    kinds = {r["title"]: r["kind"] for r in recs}
+    assert kinds == {"동탄 상업용지 매각 개찰결과 공고": "결과공고", "잔여 필지 수의계약 공급 안내": "공고"}
+    res = next(r for r in recs if r["kind"] == "결과공고")["res"]
+    assert res["stat"] == "결과공고" and res["opbd"] == "2026-09-25"
+
+
+# 2026-10-01 실제 입찰결과 API 응답에서 발췌
+WIN_ROW = {"cltrMngNo": "2025-0900-063750", "prptDivNm": "기타일반재산", "cltrUsgMclsCtgrNm": "토지",
+           "cltrUsgSclsCtgrNm": "대지", "onbidCltrNm": "강원특별자치도 정선군 고한읍 고한리 124-19 단독주택",
+           "landSqms": 152, "bldSqms": 82.85, "pbctNsq": "1", "apslEvlAmt": 136952000,
+           "lowstBidPrcIndctCont": "86279400", "cltrOpbdDt": "202609301000", "pbctStatCd": "0010",
+           "pbctStatNm": "낙찰", "scfbAmt": "88200000", "vldBddrNope": 1, "apslPrcCtrsScfbPrcRto": 64.4,
+           "lowstBidCtrsScfbPrcRto": 102.23}
+
+
+def test_result_parsing_real_row():
+    res = results.to_result(WIN_ROW)
+    assert res == {"stat": "낙찰", "amt": 88200000, "rate": 64.4, "mrate": 102.2, "bidders": 1,
+                   "opbd": "2026-09-30 10:00", "nsq": "1"}
+    rec = results.to_archive_record(WIN_ROW)
+    assert rec["sido"] == "강원" and rec["area"] == 152 and rec["res"]["amt"] == 88200000
+    fail = results.to_result({**WIN_ROW, "pbctStatCd": "0011", "pbctStatNm": "유찰", "scfbAmt": None})
+    assert fail["stat"] == "유찰" and fail["amt"] is None and fail["rate"] is None
+    no_apsl = results.to_result({**WIN_ROW, "apslEvlAmt": None, "apslPrcCtrsScfbPrcRto": None})
+    assert no_apsl["rate"] is None and no_apsl["mrate"] == 102.2
+    assert sido_of("전남광주통합특별시 장흥군 장흥읍") == "광주·전남"
+
+
+def test_latest_by_item_keeps_newest_round():
+    rows = [{**WIN_ROW, "cltrOpbdDt": "202609231000", "pbctStatCd": "0011"}, WIN_ROW]
+    best = results.latest_by_item(rows)
+    assert results.to_result(best["2025-0900-063750"])["stat"] == "낙찰"
+
+
+def _act(id_, end, **kw):
+    return {"id": id_, "src": "온비드", "kind": "물건", "title": id_, "end": end, "first_seen": "x",
+            "usage": "토지 > 대지", **kw}
+
+
+def test_build_archive_flow():
+    today = NOW.strftime("%Y-%m-%d")
+    prev = {"onbid:A": _act("onbid:A", "2026-10-02 17:00"), "onbid:GONE": _act("onbid:GONE", "2026-10-05"),
+            "lh:1": {**_act("lh:1", "2026-09-29"), "src": "LH", "kind": "공고", "prpt": "토지"}}
+    active = {"onbid:A": _act("onbid:A", "2026-10-02 17:00"), "onbid:B": _act("onbid:B", "2026-10-03"),
+              "lh:1": {**_act("lh:1", "2026-09-29"), "src": "LH", "kind": "공고"}}
+    archive = {"onbid:OLD": {**_act("onbid:OLD", "2026-05-01"), "closed": "2026-05-01"}}
+    rows = {"A": {**WIN_ROW, "cltrMngNo": "A"},                                    # 진행 중 → 낙찰
+            "B": {**WIN_ROW, "cltrMngNo": "B", "pbctStatCd": "0011", "pbctStatNm": "유찰"},  # 진행 중 유찰
+            "NEW": {**WIN_ROW, "cltrMngNo": "NEW"},                                # 처음 보는 낙찰
+            "NEWFAIL": {**WIN_ROW, "cltrMngNo": "NEWFAIL", "pbctStatCd": "0011"}}  # 처음 보는 유찰 → 무시
+    extra = [{"id": "board:r1", "src": "GH", "kind": "결과공고", "title": "결과", "end": "2026-09-25",
+              "res": {"stat": "결과공고", "opbd": "2026-09-25"}}]
+    import collect
+    act, arch = collect.build(active, prev, archive, rows, extra, "2026-09-30 09:00", today, 90)
+    act_ids = {r["id"] for r in act}
+    arch_by = {r["id"]: r for r in arch}
+    assert act_ids == {"onbid:B"}
+    assert active["onbid:B"]["last"]["stat"] == "유찰"
+    assert arch_by["onbid:A"]["res"]["amt"] == 88200000 and arch_by["onbid:A"]["status"] == "낙찰"
+    assert "onbid:GONE" in arch_by and "lh:1" in arch_by  # 목록에서 빠짐 / 마감 지남
+    assert "onbid:NEW" in arch_by and "onbid:NEWFAIL" not in arch_by
+    assert "board:r1" in arch_by
+    assert "onbid:OLD" not in arch_by  # 90일 지남 → 삭제
+
+
+def test_board_menu_discovery_filters(monkeypatch):
+    html = """<nav><a href="/sale/land.do">토지분양</a><a href="/recruit.do">채용공고</a>
+              <a href="/notice.do">공지사항·공고</a><a href="https://other.com/x">분양정보</a></nav>"""
+    monkeypatch.setattr(boards, "_soup", lambda url: BeautifulSoup(html, "html.parser"))
+    got = boards.discover_boards("https://www.ex.or.kr", 5)
+    assert got == ["https://www.ex.or.kr/sale/land.do", "https://www.ex.or.kr/notice.do"]
+
+
+def test_dev_land_filters():
+    from common import dev_category, is_dev_title, is_land_record
+    assert dev_category("화성동탄2 C-3블록 주상복합용지 공급") == "주상복합·복합"
+    assert dev_category("평택고덕 A-12BL 공동주택용지 공급공고") == "공동주택"
+    assert dev_category("세종 4-1 업무시설용지 매각") == "상업·업무"
+    assert is_dev_title("2026년 제3차 토지 공급 공고")           # 용도 미표기 일반 공고는 포함
+    assert not is_dev_title("단독주택용지(점포겸용) 추첨 공급")    # 소규모 용도 제외
+    assert not is_dev_title("근린생활시설용지 입찰")
+    assert not is_dev_title("아파트 잔여세대 분양")
+    base = {"kind": "물건", "usage": "토지 > 대지", "ot": "지방공기업", "prpt": "공유재산", "title": "x"}
+    assert is_land_record({**base, "area": 3500})
+    assert not is_land_record({**base, "area": 800})
+    assert is_land_record({**base, "area": 800, "title": "OO지구 공동주택용지"})
+    assert not is_land_record({**base, "area": 9000, "ot": "신탁사"})
+    assert not is_land_record({**base, "area": 9000, "prpt": "압류재산"})
+    assert not is_land_record({**base, "area": 9000, "usage": "주거용건물 > 아파트"})
+    assert is_land_record({"kind": "공고", "src": "LH", "title": "인천검단 AA-30 공공주택용지 공급", "usage": ""})
+    soup = BeautifulSoup('<ul><li><a href="a">아파트 분양 공고</a> 2026-09-20</li>'
+                         '<li><a href="b">국민임대 공동주택용지 공급 공고</a> 2026-09-20</li>'
+                         '<li><a href="c">중심상업용지 입찰 공고</a> 2026-09-20</li>'
+                         '<li><a href="d">이주자택지 공급 안내</a> 2026-09-20</li></ul>', "html.parser")
+    recs = boards.extract_notices("https://ex.or.kr/", soup, {"name": "X"}, since="2026-01-01")
+    assert [(r["title"], r["cat"]) for r in recs] == [("국민임대 공동주택용지 공급 공고", "공동주택"),
+                                                      ("중심상업용지 입찰 공고", "상업·업무")]
+
+
+def test_zoning_text_and_vworld_parse():
+    from common import norm_zone, zone_of
+    import zoning
+    assert zone_of("OO지구 C1 (제2종일반주거지역) 공동주택용지") == "제2종일반주거"
+    assert zone_of("중심상업지역 내 상업용지") == "중심상업"
+    assert zone_of("준주거지역") == "준주거" and zone_of("준주거용지 C4-2") == ""   # 용지명만으로는 추정하지 않음
+    assert norm_zone("제3종일반주거지역") == "제3종일반주거" and norm_zone("자연녹지지역") == "자연녹지"
+    data = {"landCharacteristicss": {"field": [
+        {"stdrYear": "2024", "prposArea1Nm": "자연녹지지역"},
+        {"stdrYear": "2025", "prposArea1Nm": "제2종일반주거지역"}]}}
+    assert zoning.parse(data) == "제2종일반주거"
+    items = [{"id": "onbid:A", "kind": "물건", "pnu": "123", "zone": ""}]
+    st = zoning.enrich(items, {"onbid:A": {"zone": "준주거", "zone_src": "vworld"}}, log=lambda *_: None)
+    assert items[0]["zone"] == "준주거" and st["ok"]
+
+
+def test_dev_onbid_jimok_and_lh_titles():
+    from common import is_dev_title, is_land_record
+    base = {"kind": "물건", "ot": "지자체", "prpt": "공유재산", "title": "x", "area": 20000}
+    assert is_land_record({**base, "usage": "토지 > 대지"})
+    assert is_land_record({**base, "usage": "토지 > 잡종지"})
+    assert not is_land_record({**base, "usage": "토지 > 임야"})
+    assert not is_land_record({**base, "usage": "토지 > 과수원"})
+    assert is_land_record({**base, "usage": "토지 > 답", "title": "OO지구 공동주택용지(답)"})
+    # 2026-10-01 실제 LH API 공고명
+    assert is_dev_title("성남복정1지구 도시지원시설용지 공급 공고")
+    assert is_dev_title("[중개알선대상토지포함]시흥권역 근린생활시설 및 일반상업용지 선착순 수의계약 공급공고")
+    assert not is_dev_title("시흥장현지구 블록형단독주택용지 공급공고(2순위)")
+    assert not is_dev_title("의왕월암 근린생활시설용지, 주차장용지 공급 공고")
+    assert not is_dev_title("남양주진접2 공공주택지구 공장이주대책용지 공급 공고")
+    assert not is_dev_title("시흥거모 공공주택지구 협의양도인택지(주거전용단독주택용지) 2차(최종) 공급공고")
+
+
+def test_board_junk_and_new_org_types():
+    soup = BeautifulSoup('''<ul>
+<li><a href="/f/1">1. [공고문] 장성 한옥 및 토지 매각.hwp (95.0KB)</a></li>
+<li><a href="/menu">택지 분양절차</a></li>
+<li><a href="/v/2">울산미포국가산업단지 부곡용연지구 지원시설용지 분양 공고</a> 2026-09-20</li>
+<li><a href="/v/3">에코델타시티 연구시설용지 분양공고(추첨)</a> 2026-09-20</li>
+<li><a href="/v/4">2026년 제3차 토지 공급 공고</a> 2026-09-21</li>
+</ul>''', "html.parser")
+    recs = boards.extract_notices("https://www.ex.or.kr/b", soup, {"name": "부산도시공사", "type": "지방공기업"}, since="2026-01-01")
+    assert [r["title"] for r in recs] == ["2026년 제3차 토지 공급 공고"]
+    assert recs[0]["ot"] == "광역 도시·개발공사"
+
+
+def test_classify_by_body_and_zone(monkeypatch):
+    from common import cat_from_zone, is_land_record
+    html = "<html><body><nav>메뉴 상업용지</nav><div>A-3블록 공동주택용지 1필지 공급, 제3종일반주거지역</div></body></html>"
+    monkeypatch.setattr(boards, "_soup", lambda url: BeautifulSoup(html, "html.parser"))
+    recs = [{"kind": "공고", "url": "https://ex.or.kr/v/1", "cat": "", "zone": ""}]
+    assert boards.classify_by_body(recs, ["https://ex.or.kr/b"]) == 1
+    assert recs[0]["cat"] == "공동주택" and recs[0]["zone"] == "제3종일반주거"
+    assert cat_from_zone("제2종일반주거") == "공동주택" and cat_from_zone("일반상업") == "상업·업무"
+    assert cat_from_zone("준주거") == "주상복합·복합" and cat_from_zone("자연녹지") == ""
+    lot = {"kind": "물건", "usage": "토지 > 대지", "ot": "지자체", "prpt": "공유재산", "title": "x", "area": 9000}
+    assert is_land_record({**lot, "zone": "자연녹지", "zone_src": "vworld"}) is False
+    assert is_land_record({**lot, "zone": "제2종일반주거", "zone_src": "vworld"}) is True
+    assert is_land_record({**lot, "title": "블록형단독주택용지 A6"}) is False
+
+
+def test_onbid_detail_url_new_format():
+    row = {"onbidCltrno": 2065354, "onbidPbancNo": 907822, "pbctNo": 10106135, "pbctCdtnNo": 6229934, "prptDivCd": "0005"}
+    assert onbid.detail_url(row) == (
+        "https://www.onbid.co.kr/op/cltrpbancinf/cltrdtl/CltrDtlController/mvmnCltrDtl.do"
+        "?cltrScrnGrpCd=0001&cltrPrptDivCd=0005&onbidCltrno=2065354&onbidPbancNo=907822&pbctNo=10106135&pbctCdtnNo=6229934")
+    assert onbid.detail_url({"onbidCltrno": 1}) == onbid.SEARCH_URL
+
+
+# ── LH 공고 요약 ──────────────────────────────────────────────
+import json  # noqa: E402
+import lhdetail  # noqa: E402
+
+FX = Path(__file__).parent / "fixtures"
+
+
+def test_lh_detail_page_busan():
+    s = lhdetail.summarize((FX / "lh_busan_b2.html").read_text(encoding="utf-8"))
+    assert s["plots_src"] == "상세페이지"
+    p = s["plots"][0]
+    assert p["addr"] == "부산광역시 강서구 강동동" and p["jibun"] == "302-0"
+    assert p["area"] == 19900 and p["price"] == 30745500000 and p["deposit"] == 1000000000
+    assert s["schedule"]["신청일시"].startswith("2026.10.15") and s["schedule"]["계약체결일정"] == "2026.10.26 ~ 2026.10.27"
+    kinds = {f["name"][:6]: f["kind"] for f in s["files"]}
+    assert kinds["부산강동공동"] == "공고문" and kinds["04.지구단"] == "지구단위계획" and kinds["01.용지공"] == "필지목록"
+    assert s["files"][0]["url"] == "https://apply.lh.or.kr/lhapply/lhFile.do?fileid=68652027"
+
+
+def test_lh_detail_page_asan_bid_schedule_and_sheet_fetch():
+    rows = json.loads((FX / "lh_sheets.json").read_text(encoding="utf-8"))["BN-0008032"]
+    s = lhdetail.summarize((FX / "lh_asan.html").read_text(encoding="utf-8"), fetch=lambda url: b"x")
+    assert s["schedule"]["개찰일시"] == "2026.10.28 16:30"
+    assert any(f["kind"] == "지구단위계획" and f["name"].endswith(".hwpx") for f in s["files"])
+    assert s["plots_src"] == "상세페이지" and s["err"]  # 가짜 바이트라 엑셀 읽기 실패 → 상세페이지 값 사용
+    assert len(s["plots"]) == 2 and s["plots"][1]["price"] == 29350000000
+    p = lhdetail.parse_parcel_rows(rows)
+    assert [x["block"] for x in p] == ["035-15", "준주거6"]
+    assert p[0]["area"] == 8867 and p[0]["jibun"] == "1748" and p[0]["bcr"] == "70%" and p[0]["far"] == "515%"
+    assert p[1]["far"] == "300%" and p[1]["use"] == "준주거용지"
+
+
+def test_lh_parcel_sheets_real_layouts():
+    S = json.loads((FX / "lh_sheets.json").read_text(encoding="utf-8"))
+    b = lhdetail.parse_parcel_rows(S["BN-0008004"])
+    assert len(b) == 1 and b[0]["block"] == "B-2" and b[0]["zone"] == "제2종일반주거지역"
+    assert b[0]["bcr"] == "60% 이하" and b[0]["far"] == "200% 이하" and "53.3m" in b[0]["floors"]
+    assert b[0]["use_from"] == "2026.02.28" and b[0]["area"] == 19900
+    h = lhdetail.parse_parcel_rows(S["BN-0008027"])  # 제목 3줄 병합 표
+    assert [x["block"] for x in h] == ["상업4-1", "상업4-2"] and h[0]["zone"] == "일반상업지역" and h[0]["area"] == 937.5
+    s = lhdetail.parse_parcel_rows(S["BN-0008048"])
+    assert s[0]["block"] == "근생9-2" and s[0]["jibun"] == "610-3" and s[0]["far"] == "300%" and s[0]["floors"] == "5층"
+    assert s[1]["district"] == "시흥은계"  # 병합 셀 채움
+    assert s[2]["floors"] == "" and s[2]["price"] == 3596805000 and s[2]["deposit"] == 359680500
+    w = lhdetail.parse_parcel_rows(S["BN-0008017"])
+    assert w[0]["jibun"] == "2745-2" and w[0]["floors"] == "4층 이하" and w[0]["price"] == 496440000 and w[1]["use"] == "근린생활시설"
+    n = lhdetail.parse_parcel_rows(S["BN-0008057"])
+    assert n[0]["block"] == "업무3" and n[0]["jibun"] == "303-101" and n[0]["use_from"] == "2029년 6월 이후"
+
+
+def test_lh_enrich_reuses_when_files_unchanged(monkeypatch):
+    html = (FX / "lh_busan_b2.html").read_text(encoding="utf-8")
+
+    class R:
+        text = html
+    calls = []
+    monkeypatch.setattr(lhdetail, "http_get", lambda url, **k: (calls.append(url), R())[1])
+    monkeypatch.setattr(lhdetail, "summarize", lambda h, fetch=None: {"sig": "new", "plots": []})
+    sig = ",".join(sorted(["68652027", "68652050", "68652051", "68652052", "68652054", "68652061", "68652070", "68652073"]))
+    items = [{"id": "lh:1", "src": "LH", "title": "t", "url": "u"}, {"id": "lh:2", "src": "LH", "title": "t", "url": "u2"}]
+    prev = {"lh:1": {"sum": {"sig": sig, "plots": [1]}, "ai": {"x": 1}}, "lh:2": {"sum": {"sig": "old", "plots": [2]}}}
+    st = lhdetail.enrich(items, prev, log=lambda *_: None)
+    assert items[0]["sum"]["plots"] == [1] and items[0]["ai"] == {"x": 1}  # 첨부 그대로 → 재사용
+    assert items[1]["sum"]["sig"] == "new"  # 첨부 바뀜(정정공고) → 다시 요약
+    assert "새로 요약 1건, 재사용 1건" in st["message"]
+
+
+def test_ai_summary_inert_without_key_and_parses_hwpx(monkeypatch, tmp_path):
+    import io
+    import zipfile
+    import ai_summary
+    monkeypatch.setattr(ai_summary, "USAGE", tmp_path / "ai_usage.json")
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    items = [{"id": "lh:1", "src": "LH", "title": "t", "sum": {"sig": "s", "files": [{"kind": "지구단위계획"}]}}]
+    st = ai_summary.enrich(items, "2026-10-14 08:00")
+    assert st["ok"] and "미설정" in st["message"] and "ai" not in items[0]
+
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as z:
+        z.writestr("Contents/section0.xml", "<hp:p>구분 | 기정 | 변경</hp:p><hp:tr><hp:tc>B2</hp:tc><hp:tc>용적률 180% 이하</hp:tc>"
+                   "<hp:tc>용적률 200% 이하</hp:tc></hp:tr><hp:p>건폐율 60% 이하, 최고층수 25층</hp:p>")
+    files = {"u1": buf.getvalue()}
+    s = {"sig": "s", "plots": [{"block": "B2", "use": "공동주택용지", "area": 19900}],
+         "files": [{"kind": "지구단위계획", "name": "결정조서.hwpx", "url": "u1"}, {"kind": "공고문", "name": "a.hwp", "url": "x"}]}
+    seen = {}
+
+    def caller(key, model, prompt):
+        seen["p"] = prompt
+        return ('결과: {"blocks":[{"block":"B2","far":"200% 이하","bcr":"60% 이하","floors":"25층","other":"주동 배치"}],'
+                '"common":["공공보행통로 설치"]}', {"input_tokens": 1000, "output_tokens": 100})
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test")
+    items = [{"id": "lh:1", "title": "부산", "sum": s}]
+    st = ai_summary.enrich(items, "2026-10-14 08:00", log=lambda *_: None, fetch=files.__getitem__, caller=caller)
+    assert "B2" in seen["p"] and "200% 이하" in seen["p"] and "변경" in seen["p"]
+    ai = items[0]["ai"]
+    assert ai["blocks"][0]["far"] == "200% 이하" and ai["blocks"][0]["other"] == ["주동 배치"] and ai["sig"] == "s"
+    assert ai["common"] == ["공공보행통로 설치"] and "새로 요약 1건" in st["message"]
+    assert "(1회)" in st["message"] and json.loads((tmp_path / "ai_usage.json").read_text())["calls"] == 1
+    # 첨부 그대로면 다시 부르지 않는다
+    seen.clear()
+    ai_summary.enrich(items, "x", log=lambda *_: None, fetch=files.__getitem__, caller=caller)
+    assert not seen
+
+
+def test_lh_summary_fills_price_from_page_when_sheet_lacks_it():
+    S = json.loads((FX / "lh_sheets.json").read_text(encoding="utf-8"))
+    html = (FX / "lh_busan_b2.html").read_text(encoding="utf-8")
+    s = lhdetail.summarize(html, fetch=lambda url: b"x")
+    assert s["plots_src"] in ("상세페이지", "")  # 가짜 엑셀은 읽기 실패 → 상세페이지로
+    orig = lhdetail.read_sheet
+    try:
+        lhdetail.read_sheet = lambda data, name: S["BN-0008004"]
+        s = lhdetail.summarize(html, fetch=lambda url: b"x")
+    finally:
+        lhdetail.read_sheet = orig
+    p = s["plots"][0]
+    assert s["plots_src"] == "필지목록" and p["far"] == "200% 이하" and p["price"] == 30745500000 and p["deposit"] == 1000000000
+
+
+def test_ai_summary_scope_rules():
+    import ai_summary as A
+    today = "2026-10-14"
+    big_apt = {"sum": {"plots": [{"use": "공동주택용지", "area": 19900}], "schedule": {"신청일시": "2026.10.15 (10:00 ~ 16:00)"}}}
+    assert A.why_not(big_apt, today) == ""
+    small = {"sum": {"plots": [{"use": "공동주택용지", "area": 4900}], "schedule": {}}}  # 1,482평
+    assert A.why_not(small, today).startswith("조건")
+    shop = {"sum": {"plots": [{"use": "일반상업용지", "area": 9000}, {"use": "근린생활시설용지", "area": 6000}]}}
+    assert A.why_not(shop, today).startswith("조건")
+    mixed = {"sum": {"plots": [{"use": "주상복합용지", "area": 5000}, {"use": "준주거용지", "area": 800}]}}
+    assert A.why_not(mixed, today) == "" and len(A.eligible_plots(mixed)) == 1
+    closed = {"sum": {"plots": [{"use": "공동주택용지", "area": 20000}],
+                      "schedule": {"신청일시": "2026.10.01 (10:00 ~ 16:00)", "계약체결일정": "2026.10.20 ~ 2026.10.21"}}}
+    assert A.why_not(closed, today) == "마감"  # 계약일정은 마감 판단에서 제외
+    no_plots = {"cat": "공동주택", "area": 6000, "end": "2026-11-01", "sum": {"plots": []}}
+    assert A.why_not(no_plots, today) == ""
+    assert not A.is_housing("단독주택용지") and A.is_housing("아파트(60~85㎡ 공동)")
+
+
+def test_ai_summary_monthly_budget_stops(monkeypatch, tmp_path):
+    import ai_summary as A
+    monkeypatch.setattr(A, "USAGE", tmp_path / "u.json")
+    monkeypatch.setattr(A, "BUDGET", 0.1)
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test")
+    called = []
+    items = [{"id": "lh:9", "title": "t", "sum": {"sig": "s", "plots": [{"use": "공동주택용지", "area": 20000}],
+              "files": [{"kind": "지구단위계획", "name": "a.hwpx", "url": "u"}]}}]
+    st = A.enrich(items, "2026-10-14 08:00", log=lambda *_: None, fetch=lambda u: b"", caller=lambda *a: called.append(1))
+    assert not called and "상한" in st["message"] and "ai" not in items[0]
+
+
+def test_ai_summary_reads_zip_and_skips_broken_file(monkeypatch, tmp_path):
+    import io
+    import zipfile
+    import ai_summary as A
+    monkeypatch.setattr(A, "USAGE", tmp_path / "u.json")
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test")
+    inner = io.BytesIO()
+    with zipfile.ZipFile(inner, "w") as z:
+        z.writestr("Contents/section0.xml", "<hp:p>F10 허용용도 공동주택 용적률 500% 이하 건폐율 70%</hp:p>")
+    outer = io.BytesIO()
+    with zipfile.ZipFile(outer, "w") as z:
+        z.writestr("지침/시행지침.hwpx", inner.getvalue())
+        z.writestr("readme.txt", "x")
+    files = {"zip": outer.getvalue(), "bad": b"not a zip at all"}
+    assert any("500%" in p for p in A.pages_of("05.지구단위계획시행지침.zip", files["zip"]))
+    assert A.pages_of("broken.hwpx", files["bad"]) == []
+    seen = {}
+
+    def caller(key, model, prompt):
+        seen["p"] = prompt
+        return '{"blocks":[{"block":"F10","far":"500% 이하"}],"common":[]}', {"input_tokens": 10, "output_tokens": 5}
+    s = {"sig": "s", "plots": [{"block": "F10", "use": "주상복합용지", "area": 25904}],
+         "files": [{"kind": "지구단위계획", "name": "결정조서.hwpx", "url": "bad"},
+                   {"kind": "지구단위계획", "name": "05.지구단위계획시행지침.zip", "url": "zip"}]}
+    # 예전에 지구단위계획 없이(공고문만으로) 요약된 기록 → 한 번 다시 요약
+    items = [{"id": "lh:1", "title": "파주", "sum": s, "ai": {"sig": "s", "blocks": [{"block": "F10"}], "src": ["공고문.pdf"]}}]
+    st = A.enrich(items, "2026-10-14 16:00", log=lambda *_: None, fetch=files.__getitem__, caller=caller)
+    assert "500%" in seen["p"] and items[0]["ai"]["src"] == ["05.지구단위계획시행지침.zip"] and items[0]["ai"]["plan_retry"] == 1
+    assert "새로 요약 1건" in st["message"]
+    seen.clear()
+    A.enrich(items, "x", log=lambda *_: None, fetch=files.__getitem__, caller=caller)
+    assert not seen  # 다시 하지 않음
+
+
+def test_ppp_development_competitions_are_collected():
+    from common import dev_category, is_land_title, is_ppp_title
+    yes = ["의왕시 오전역세권 복합개발사업 민간참여자 재공모 공고",
+           "경의선 DMC역 복합개발사업 민간사업자 공모",
+           "의왕시 오전역세권 복합개발사업 민간참여자 공모 공고",
+           "○○역세권 개발사업 공모 공고",
+           "경의중앙선 디지털미디어시티(DMC)역 복합개발사업 사업주관자 공모"]
+    no = ["의왕시 오전역세권 복합개발사업 민간참여자 선정심의위원(후보자) 모집 공고",
+          "오전역세권 복합개발사업 민간참여자 공모 질의회신 일정변경 알림",
+          "민간참여자 공모 공모지침서 배부 및 공지 알림 설명회",
+          "우선협상대상자 선정 결과 공고",
+          "2026년 도시재생 아이디어 공모전", "공사 CI 디자인 공모"]
+    for t in yes:
+        assert is_ppp_title(t) and dev_category(t) == "민관합동 공모" and is_land_title(t), t
+    for t in no:
+        assert not is_ppp_title(t), t
+    soup = BeautifulSoup('<table><tr><td><a href="/read?no=1">의왕시 오전역세권 복합개발사업 민간참여자 재공모 공고</a></td>'
+                         '<td>2026.10.06</td></tr></table>', "html.parser")
+    recs = boards.extract_notices("https://www.uuc.or.kr/base/board/list", soup,
+                                  {"name": "의왕도시공사", "sido": "경기"}, "2026-06-01")
+    assert len(recs) == 1 and recs[0]["cat"] == "민관합동 공모" and recs[0]["posted"] == "2026-10-06"
+
+
+def test_board_read_without_matching_notice_is_ok(monkeypatch):
+    html = """<table><tr><td><a href="/v?id=1">2027년 시민위원회 위원 모집 공고</a></td><td>2026-11-05</td></tr>
+    <tr><td><a href="/v?id=2">외부회계감사인 선임 결과 공고</a></td><td>2026-11-04</td></tr></table>"""
+    monkeypatch.setattr(boards, "_soup", lambda url: BeautifulSoup(html, "html.parser"))
+    monkeypatch.setattr(boards, "_render_available", lambda: False)
+    recs, st = boards.collect_one({"name": "X공사", "boards": ["https://ex.or.kr/b"]}, "2026-08-01", 6)
+    assert recs == [] and st["ok"] is True and "게시판 정상" in st["message"]

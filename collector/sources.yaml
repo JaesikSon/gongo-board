@@ -16,7 +16,11 @@
 
 sources:
   # ── 광역 ─────────────────────────────────────────
-  - {name: 서울주택도시개발공사(SH), sido: 서울, type: SH, homepage: "https://www.i-sh.co.kr"}
+  - name: 서울주택도시개발공사(SH)
+    sido: 서울
+    type: SH
+    homepage: "https://www.i-sh.co.kr"
+    boards: ["https://www.i-sh.co.kr/main/lay2/program/S1T294C299/www/brd/m_255/list.do?multi_itm_seq=8"]  # 공고 및 공지 > 토지
   - {name: 경기주택도시공사(GH), sido: 경기, type: 지방공기업, homepage: "https://www.gh.or.kr"}
   - name: 인천도시공사(iH)
     sido: 인천
@@ -24,11 +28,11 @@ sources:
     homepage: "https://www.ih.co.kr"
     boards: ["https://www.ih.co.kr/main/sale_lease/board/land_notice.jsp", "https://www.ih.co.kr/main/customer/notification/notice.jsp"]  # 토지분양, iH알림
   - {name: 부산도시공사, sido: 부산, type: 지방공기업, homepage: "https://www.bmc.busan.kr"}
-  - {name: 대구도시개발공사, sido: 대구, type: 지방공기업, homepage: "https://www.duco.or.kr"}
+  - {name: 대구도시개발공사, sido: 대구, type: 지방공기업, homepage: "https://www.duco.or.kr", enabled: false}  # 국내에서도 접속 안 됨(2026-11 확인) → 중지
   - {name: 광주도시공사, sido: 광주, type: 지방공기업, homepage: "https://www.gmcc.co.kr"}
   - {name: 대전도시공사, sido: 대전, type: 지방공기업, homepage: "https://www.dcco.kr"}
   - {name: 울산도시공사, sido: 울산, type: 지방공기업, homepage: "https://www.umca.co.kr"}
-  - {name: 강원개발공사, sido: 강원, type: 지방공기업, homepage: "https://www.gdc.co.kr"}
+  - {name: 강원개발공사, sido: 강원, type: 지방공기업, homepage: "https://www.gwdc.co.kr", enabled: false}  # gdc.co.kr 은 주차 도메인, gdc.or.kr 은 광주디자인진흥원 → 정확한 주소 확인 전까지 중지
   - {name: 충북개발공사, sido: 충북, type: 지방공기업, homepage: "https://www.cbdc.co.kr"}
   - {name: 충남개발공사, sido: 충남, type: 지방공기업, homepage: "https://www.cndc.kr"}
   - {name: 전북개발공사, sido: 전북, type: 지방공기업, homepage: "https://www.jbdc.co.kr"}
@@ -81,23 +85,61 @@ sources:
     type: 지방공기업
     homepage: "https://www.guc.or.kr"
     boards: ["https://www.guc.or.kr/notice/compensation.php", "https://www.guc.or.kr/notice/gosi.php", "https://www.guc.or.kr/notice/notice.php"]  # 분양/보상, 고시 및 공고, 공지사항
-  - {name: 광명도시공사, sido: 경기, type: 지방공기업, homepage: "https://www.gmuc.co.kr"}
-  - {name: 군포도시공사, sido: 경기, type: 지방공기업, homepage: "https://www.gunpouc.or.kr/fmcs/1"}
-  - {name: 남양주도시공사, sido: 경기, type: 지방공기업, homepage: "https://www.ncuc.or.kr"}
+  - name: 광명도시공사
+    sido: 경기
+    type: 지방공기업
+    homepage: "https://www.gmuc.co.kr"
+    boards: ["https://www.gmuc.co.kr/user/board/boardList.do?code=BD_NO", "https://www.gmuc.co.kr/user/board/boardList.do?code=BD_UD", "https://www.gmuc.co.kr/user/board/boardList.do?code=BD_IC"]
+  - name: 군포도시공사
+    sido: 경기
+    type: 지방공기업
+    homepage: "https://www.gunpouc.or.kr/fmcs/1"
+    boards: ["https://www.gunpouc.or.kr/fmcs/74", "https://www.gunpouc.or.kr/fmcs/621"]
+  - name: 남양주도시공사
+    sido: 경기
+    type: 지방공기업
+    homepage: "https://www.ncuc.or.kr"
+    boards: ["https://www.ncuc.or.kr/main/32", "https://www.ncuc.or.kr/main/35"]
   - {name: 수원도시공사, sido: 경기, type: 지방공기업, homepage: "https://www.suwonudc.co.kr"}
-  - {name: 시흥도시공사, sido: 경기, type: 지방공기업, homepage: "https://www.shsi.or.kr"}
-  - {name: 안산도시공사, sido: 경기, type: 지방공기업, homepage: "https://www.ansanuc.net"}
-  - {name: 안양도시공사, sido: 경기, type: 지방공기업, homepage: "http://www.auc.or.kr"}
-  - {name: 양주도시공사, sido: 경기, type: 지방공기업, homepage: "https://www.yjuc.or.kr"}
-  - {name: 파주도시공사, sido: 경기, type: 지방공기업, homepage: "https://www.pajuuc.or.kr"}
-  - {name: 하남도시공사, sido: 경기, type: 지방공기업, homepage: "https://www.huic.co.kr"}
-  - {name: 화성도시공사, sido: 경기, type: 지방공기업, homepage: "https://www.hsuco.or.kr"}
-  - {name: 용인도시공사, sido: 경기, type: 지방공기업, homepage: "https://www.yuc.co.kr"}
+  - name: 시흥도시공사
+    sido: 경기
+    type: 지방공기업
+    homepage: "https://www.shsi.or.kr"
+    boards:
+      - "https://www.shsi.or.kr/PageLink.do?link=forward:/cop/bbs/selectBoardList.do?bbsId=sale_announcement_main&tempParam1=&menuNo=080000&subMenuNo=070600&thirdMenuNo="
+      - "https://www.shsi.or.kr/PageLink.do?link=forward:/cop/bbs/selectBoardList.do?bbsId=Announcement_main&tempParam1=&menuNo=070000&subMenuNo=050100&thirdMenuNo="
+      - "https://www.shsi.or.kr/PageLink.do?link=forward:/cop/bbs/selectBoardList.do?bbsId=privateBussiness_main&tempParam1=&menuNo=070000&subMenuNo=050800&thirdMenuNo="
+  - name: 안산도시공사
+    sido: 경기
+    type: 지방공기업
+    homepage: "https://www.ansanuc.net"
+    boards: ["https://www.ansanuc.net/homenew/12286/20328/bbsList.do", "https://www.ansanuc.net/homenew/12435/20359/bbsList.do", "https://www.ansanuc.net/homenew/12244/20324/bbsList.do"]
+  - name: 안양도시공사
+    sido: 경기
+    type: 지방공기업
+    homepage: "https://www.auc.or.kr/base/main/view"
+    boards:
+      - "https://www.auc.or.kr/base/board/list?boardManagementNo=85&menuLevel=2&menuNo=407"
+      - "https://www.auc.or.kr/base/board/list?boardManagementNo=91&menuLevel=3&menuNo=124"
+      - "https://www.auc.or.kr/base/board/list?boardManagementNo=11&menuLevel=2&menuNo=14"
+  - {name: 양주도시공사, sido: 경기, type: 지방공기업, homepage: "https://www.yjuc.or.kr", enabled: false}  # 시설관리 공사(토지 매각 없음)
+  - {name: 파주도시공사, sido: 경기, type: 지방공기업, homepage: "https://www.pajuuc.or.kr/index.do", boards: ["https://www.pajuuc.or.kr/board/news/public.do"]}
+  - name: 하남도시공사
+    sido: 경기
+    type: 지방공기업
+    homepage: "https://www.huic.co.kr/www/index.do"
+    boards: ["https://www.huic.co.kr/www/selectBbsNttList.do?bbsNo=36&key=102", "https://www.huic.co.kr/www/selectBbsNttList.do?bbsNo=71&key=211", "https://www.huic.co.kr/www/selectBbsNttList.do?bbsNo=47&key=108"]
+  - {name: 화성도시공사, sido: 경기, type: 지방공기업, homepage: "https://www.hsuco.or.kr", enabled: false}  # 도메인 조회 안 됨(2026-11) → 정확한 주소 확인 전까지 중지
+  - name: 용인도시공사
+    sido: 경기
+    type: 지방공기업
+    homepage: "https://www.yuc.co.kr"
+    boards: ["https://www.yuc.co.kr/www/brd/m_432/list.do", "https://www.yuc.co.kr/www/brd/m_437/list.do", "https://www.yuc.co.kr/www/brd/m_439/list.do", "https://www.yuc.co.kr/www/brd/m_438/list.do"]
   - {name: 평택도시공사, sido: 경기, type: 지방공기업, homepage: "https://www.puc.or.kr"}
   - {name: 구리도시공사, sido: 경기, type: 지방공기업, homepage: "https://www.guriuc.or.kr"}
-  - {name: 의정부도시공사, sido: 경기, type: 지방공기업, homepage: "https://www.uiuc.or.kr"}
+  - {name: 의정부도시공사, sido: 경기, type: 지방공기업, homepage: "https://www.uiuc.or.kr", boards: ["https://www.uiuc.or.kr/menu/companyNotice/noticePage", "https://www.uiuc.or.kr/menu/companyNotice/announcementPage"]}
   - {name: 포천도시공사, sido: 경기, type: 지방공기업, homepage: "https://www.pcuc.kr"}
-  - {name: 광주도시관리공사, sido: 경기, type: 지방공기업, homepage: "https://www.gumc.or.kr"}
+  - {name: 광주도시관리공사, sido: 경기, type: 지방공기업, homepage: "https://www.gumc.or.kr", boards: ["https://www.gumc.or.kr/news/bidding"]}
 
   # ── 중앙 공공기관 (역세권·철도부지·국유지 개발 공모) ─────────────────
   - name: 국가철도공단
@@ -108,7 +150,7 @@ sources:
       - "https://www.kr.or.kr/boardCnts/list.do?boardID=51&searchType=title&searchStr=%EA%B3%B5%EB%AA%A8"   # '공모'
       - "https://www.kr.or.kr/boardCnts/list.do?boardID=51&searchType=title&searchStr=%EB%A7%A4%EA%B0%81"   # '매각'
       - "https://www.kr.or.kr/boardCnts/list.do?boardID=51&searchType=title&searchStr=%EA%B0%9C%EB%B0%9C"   # '개발'
-  - {name: 한국철도공사(코레일), sido: "", type: 중앙 공공기관, homepage: "https://info.korail.com"}
+  - {name: 한국철도공사(코레일), sido: "", type: 중앙 공공기관, homepage: "https://info.korail.com", enabled: false}  # 공모 게시판 주소 확인 전까지 중지
   - name: 한국자산관리공사(캠코)
     sido: ""
     type: 캠코

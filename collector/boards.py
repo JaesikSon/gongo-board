@@ -108,6 +108,25 @@ def discover_boards(homepage: str, limit: int, fetch=None) -> list[str]:
     return found[:limit]
 
 
+_DATE_RX = re.compile(r"(20\d{2})[.\-/]\s?(\d{1,2})[.\-/]\s?(\d{1,2})")
+
+
+def count_posts(soup: BeautifulSoup) -> int:
+    """게시판 목록에서 '제목 + 날짜'가 있는 글 수. 0보다 크면 게시판은 제대로 읽힌 것."""
+    n = 0
+    for a in soup.find_all("a"):
+        t = " ".join(a.get_text(" ", strip=True).split())
+        if len(t) < 6 or FILE_RX.search(t):
+            continue
+        row = a.find_parent(["tr", "li", "dl"]) or a.find_parent("div")
+        if row is None:
+            continue
+        rt = " ".join(row.get_text(" ", strip=True).split())
+        if len(rt) < 400 and _DATE_RX.search(rt):
+            n += 1
+    return n
+
+
 def extract_notices(board_url: str, soup: BeautifulSoup, src: dict, since: str) -> list[dict]:
     out = []
     for a in soup.find_all("a"):
@@ -188,15 +207,20 @@ def load_sources(path: Path) -> list[dict]:
     return [s for s in data.get("sources", []) if s.get("enabled", True)]
 
 
-def _read_boards(boards: list[str], src: dict, since: str, fetch, recs: list, seen: set, errs: list) -> None:
+def _read_boards(boards: list[str], src: dict, since: str, fetch, recs: list, seen: set, errs: list) -> int:
+    """게시판들을 읽어 공고를 recs 에 더하고, 확인한 게시글 수를 돌려준다."""
+    posts = 0
     for b in boards:
         try:
-            for n in extract_notices(b, fetch(b), src, since):
+            soup = fetch(b)
+            posts += count_posts(soup)
+            for n in extract_notices(b, soup, src, since):
                 if n["id"] not in seen:
                     seen.add(n["id"])
                     recs.append(n)
         except Exception as e:  # noqa: BLE001
             errs.append(f"{b}: {type(e).__name__}")
+    return posts
 
 
 def collect_one(src: dict, since: str, limit: int) -> tuple[list[dict], dict]:
@@ -204,21 +228,23 @@ def collect_one(src: dict, since: str, limit: int) -> tuple[list[dict], dict]:
     msg_prefix = ""
     try:
         recs, seen, errs = [], set(), []
+        posts = 0
         static_ok = not src.get("render")
         if static_ok:
             try:
                 if not boards and src.get("homepage"):
                     boards = discover_boards(src["homepage"], limit)
                     msg_prefix = f"게시판 {len(boards)}개 자동탐색 · "
-                _read_boards(boards, src, since, _soup, recs, seen, errs)
+                posts = _read_boards(boards, src, since, _soup, recs, seen, errs)
             except Exception as e:  # noqa: BLE001
                 errs.append(f"{type(e).__name__}: {str(e)[:80]}")
-        # 일반 방식으로 하나도 못 읽었으면 실제 브라우저로 화면을 그려서 다시 시도
-        if not recs and _render_available():
+        # 일반 방식으로 게시글을 하나도 못 읽었으면 실제 브라우저로 화면을 그려서 다시 시도
+        # (게시글은 읽혔는데 해당 공고가 없는 경우는 다시 그릴 필요 없음)
+        if not recs and not posts and _render_available():
             try:
                 rboards = src.get("boards") or (discover_boards(src["homepage"], limit, _render) if src.get("homepage") else [])
                 rerrs: list = []
-                _read_boards(rboards, src, since, _render, recs, seen, rerrs)
+                posts = _read_boards(rboards, src, since, _render, recs, seen, rerrs)
                 if rboards:
                     boards = rboards
                     msg_prefix = ("" if src.get("boards") else f"게시판 {len(rboards)}개 자동탐색 · ") + "브라우저 렌더링 · "
@@ -236,11 +262,15 @@ def collect_one(src: dict, since: str, limit: int) -> tuple[list[dict], dict]:
             msg += f" (본문으로 용도 분류 {n_body}건)"
         if not boards:
             msg += " (게시판을 찾지 못함 — boards 에 URL 지정 필요)"
+        elif not recs and posts:
+            msg += f" — 게시판 정상 (게시글 {posts}건 확인, 최근 {LOOKBACK}일 안에 해당 공고 없음)"
         elif not recs:
-            msg += " (목록이 자바스크립트로 그려지는 사이트일 수 있음)"
-        if errs:
+            msg += " (게시글을 읽지 못함 — 목록이 자바스크립트로 그려지거나 수집 서버 접속이 막힌 사이트)"
+        if errs and not posts:
             msg += f" / 실패 {len(errs)}: {errs[0][:120]}"
-        return recs, {"name": src["name"], "ok": bool(recs), "count": len(recs), "message": msg,
+        elif errs:
+            msg += f" / 일부 게시판 실패 {len(errs)}"
+        return recs, {"name": src["name"], "ok": bool(recs) or posts > 0, "count": len(recs), "message": msg,
                       "url": src.get("homepage") or (boards[0] if boards else "")}
     except Exception as e:  # noqa: BLE001
         return [], {"name": src["name"], "ok": False, "count": 0,
@@ -248,8 +278,11 @@ def collect_one(src: dict, since: str, limit: int) -> tuple[list[dict], dict]:
                     "url": src.get("homepage", "")}
 
 
+LOOKBACK = int(env("BOARD_LOOKBACK_DAYS", "120"))
+
+
 def collect(sources_path: Path, log=print) -> dict:
-    since = (now_kst() - timedelta(days=int(env("BOARD_LOOKBACK_DAYS", "120")))).strftime("%Y-%m-%d")
+    since = (now_kst() - timedelta(days=LOOKBACK)).strftime("%Y-%m-%d")
     limit = int(env("BOARD_DISCOVER_LIMIT", "6"))
     records, statuses = [], []
     try:
